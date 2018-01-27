@@ -1129,7 +1129,7 @@ function xmplRead {
 
 function showHelp {
 	echo "	"
-	if [ -f ${XMPL_HOME}/.xmpl/xmpl.conf ];then
+	if [ -f ${XMPL_HOME}/.xmpl/repo.conf ];then
 		echo "Full usage:"
 	else
 		echo "No-install usage:"
@@ -1144,7 +1144,7 @@ function showHelp {
 	echo "	"	  
 	echo "	-c				Display comments in examples"
 	echo "	"	  	
-	if [ -f ${XMPL_HOME}/.xmpl/xmpl.conf ];then
+	if [ -f ${XMPL_HOME}/.xmpl/repo.conf ];then
 		echo "	-o 				Force online working mode"
 	fi
 	echo "	-O 				Force online working mode with descriptions"
@@ -1156,7 +1156,7 @@ function showHelp {
 	echo "	-X [<arguments>]		Execute last selected example"
 	echo "	"
     echo "	-I				Install on local system"
-	if [ -f ${XMPL_HOME}/.xmpl/xmpl.conf ];then
+	if [ -f ${XMPL_HOME}/.xmpl/repo.conf ];then
 		echo "	-U			 	Uninstall from local system"
 		echo "	"
 		echo "	-N [github_user/repo]		Add new private repository"	  
