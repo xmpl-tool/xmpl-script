@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# xmpl-tool v1.0.1
+# xmpl-tool v1.0.2
 # Author: Ivan Krpan
 # Date: 28.01.2018
 
@@ -85,11 +85,11 @@ function installPrivateRepo {
 
 function checkRequirements {
 
-	if ! curl --help >& /dev/null; then
+	if ! [ -f /usr/bin/curl ]; then
 		echo "curl is not installed!"
 		return 1
 	fi
-	if ! jq --help >& /dev/null; then
+	if ! [ -f /usr/bin/jq ]; then
 		echo "jq is not installed!"
 		return 1
 	fi	
