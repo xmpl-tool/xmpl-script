@@ -130,16 +130,16 @@ function installLocal {
 		#installing requirement packages
 		case $packageManager in
 				"apt-get" ) 
-				apt-get install curl jq git
+				apt-get update && apt-get install curl jq git
 				;;
 				"zypp" ) 
-				zypper in curl jq git
+				zypper ref && zypper in curl jq git
 				;;
 				"emerge" ) 
-				emerge -pv net-misc/curl app-misc/jq dev-vcs/git
+				emerge --sync && emerge -pv net-misc/curl app-misc/jq dev-vcs/git
 				;;
 				"pacman" ) 
-				pacman -S curl jq git
+				pacman -Sy curl jq git
 				;;
 				"yum" ) 
 				yum install curl jq git
