@@ -849,7 +849,7 @@ function executeMode {
 # EDITOR FUNCTIONS
 function xmplEditor {
 
-	local input data tags title package newRepoAlias XMPL_USERNAME response response2 names paths urls
+	local input data tags title package newRepoAlias XMPL_USERNAME response response2 names paths urls outFile
 
 	package=$1
 	newRepoAlias=$2
@@ -979,14 +979,15 @@ function xmplEditor {
 				done
 				[ -z ${tags} ] || break
 			done				
-	
-			echo "#${title,,}" > ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package/${title}.xmpl
-			echo "#${tags,,}" >> ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package/${title}.xmpl			
-			echo "${data}" >> ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package/${title}.xmpl
+			
+			outFile=${title//[\/]/ }
+			echo "#${title,,}" > ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package/${outFile}.xmpl
+			echo "#${tags,,}" >> ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package/${outFile}.xmpl			
+			echo "${data}" >> ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package/${outFile}.xmpl
 
 			echo -e "\e[33mExample '${title}' successfully modified!\e[39m" >&2
 			echo -e "\e[32m" >&2
-			cat ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package/$title.xmpl >&2
+			cat ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package/$outFile.xmpl >&2
 			echo -e "\e[39m" >&2
 
 		fi
