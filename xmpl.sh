@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# xmpl-tool v1.0.0
+# xmpl-tool v1.0.1
 # Author: Ivan Krpan
-# Date: 26.01.2018
+# Date: 28.01.2018
 
 trap '' INT
 
@@ -85,11 +85,11 @@ function installPrivateRepo {
 
 function checkRequirements {
 
-	if ! dpkg-query -l curl > /dev/null; then
+	if ! curl --help >& /dev/null; then
 		echo "curl is not installed!"
 		return 1
 	fi
-	if ! dpkg-query -l jq > /dev/null; then
+	if ! jq --help >& /dev/null; then
 		echo "jq is not installed!"
 		return 1
 	fi	
@@ -317,7 +317,7 @@ function addNewRepository {
 			response=${response,,} # tolower
 			if [[ $response =~ ^(yes|y) ]]; then
 				if forkRepository $user $toFork;then
-					if [ $XMPL_USER != $(whoami) ];then
+					if [[ "$XMPL_USER" != "$(whoami)" ]];then
 						su $XMPL_USER -c "rm -rf ${XMPL_HOME}/.xmpl/repos/$user"
 						su $XMPL_USER -c "mkdir -p ${XMPL_HOME}/.xmpl/repos/$user"
 						su $XMPL_USER -c "git clone https://github.com/$user/$repoName ${XMPL_HOME}/.xmpl/repos/$user/$repoName"
@@ -362,13 +362,22 @@ function forkRepository {
 	
 		repoStatus1=$(curl --silent  https://api.github.com/repos/$user/$repoName --stderr - | jq '.id')
 		
-		sleep 1
+		sleep 3
 		if [ $repoStatus1 == "null" ]; then
 				if curl --silent -u ${user} https://api.github.com/repos/$toFork/forks -d '' -f 1>/dev/null;then
 					echo -e "\e[33mCreating fork of main repository...\e[39m" >&2
- 					while [ $repoStatus1 == "null" ];do
-							sleep 1
+ 					for i in 1 2 3; do
+					#while [ $repoStatus1 == "null" ];do
+							sleep 3
 							repoStatus1=$(curl --silent  https://api.github.com/repos/$user/$repoName --stderr - | jq '.id')
+							if [ $repoStatus1 != "null" ];then
+								break
+							fi
+							if [ $i -eq 3 ];then
+								echo -e "\e[31mFailed!\n\e[33mPlease try again\e[39m" >&2
+								return 1
+							fi
+						
 					done
 					echo -e "\e[33mDone!\e[39m" >&2
 					break
@@ -507,7 +516,7 @@ function syncRepository {
 						return 1
 					fi
 					response=${response,,} # tolower
-					if ! [[ $response2 =~ ^(yes|y| ) ]] || ! [[ -z $response2 ]]; then
+					if ! [[ $response =~ ^(yes|y| ) ]] || ! [[ -z $response ]]; then
 						break
 					fi
 			done
@@ -546,14 +555,14 @@ function pullRepository {
 
 			while : ;do 
 				if curl --silent -u ${XMPL_USERNAME} https://api.github.com/repos/xmpl-tool/xmpl-repo/pulls -d "{ \"title\": \"$prTitle\", \"body\": \"$prBody\", \"head\": \"$XMPL_USERNAME:master\", \"base\": \"master\" }" -f 1>/dev/null;then
-					echo -e "\e[33mPull request successfully!\e[39m" >&2
+					echo -e "\e[33mPull request successfull!\e[39m" >&2
 					break
 				else
 					if ! response=$(xmplRead "Wrong password for user '$XMPL_USERNAME'!\nTry again? [Y/n]");then
 						return 1
 					fi
 					response=${response,,} # tolower
-					if ! [[ $response =~ ^(yes|y| ) || -z $response ]]; then
+					if ! [[ $response =~ ^(yes|y| ) ]] || ! [[ -z $response ]]; then
 						break
 					fi
 				fi
@@ -583,7 +592,9 @@ function queryExamples {
 		XMPL_REPO=$(grep -oP "$XMPL_CURRENT_REPO *= *\K.*" ${XMPL_HOME}/.xmpl/repo.conf)
 	else
 		XMPL_REPO='xmpl-tool/xmpl-repo'
-		XMPL_MODE_ONLINE=1
+		if [ $XMPL_MODE_ONLINE == 0 ];then
+			XMPL_MODE_ONLINE=1
+		fi
 	fi
 	XMPL_USERNAME=$(dirname $XMPL_REPO)
 	
@@ -1180,8 +1191,10 @@ function showHelp {
 
 oIFS=$IFS 	#Saving old IFS
 IFS=$'\n' 	#Delimiter to new line
-
-XMPL_USER=$(who -m | awk '{print $1;}')
+XMPL_USER=$USER
+if ! [ -z $SUDO_USER ];then 
+	XMPL_USER=$SUDO_USER
+fi
 XMPL_HOME=$(eval echo "~${XMPL_USER}")
 
 #parms to nothing
@@ -1490,7 +1503,8 @@ if [ $XMPL_MODE_NULL != 1 -a $XMPL_MODE_QUERY == 1 ];then
 	fi
 
 	if ! checkRequirements;then
-		echo -e "\e[33mTry 'sudo bash `basename $0` -I' for xmpl installation\e[39m"
+			
+		echo -e "\e[33mTry 'sudo bash `basename ${BASH_SOURCE[0]}` -I' for xmpl installation\e[39m"
 		if ! return >& /dev/null; then
 			exit
 		fi
