@@ -4,8 +4,6 @@
 # Author: Ivan Krpan
 # Date: 28.01.2018
 
-trap '' INT
-
 ##################################################################
 # EXIT FUNCTIONS
 function byebye {
@@ -105,9 +103,8 @@ function installLocal {
 	   return
 	fi
 	
-	if ! response=$(xmplRead "Do you really want to install xmpl on your local system? [Y/n]");then
-		return 1
-	fi	
+	echo -e "Do you really want to install xmpl on your local system? [Y/n]" >&2
+	read response
 
 	response=${response,,} # tolower
 	if [[ $response =~ ^(yes|y| ) ]] || [[ -z $response ]]; then
@@ -164,9 +161,8 @@ function installLocal {
 		
 		
 		#Install Repo
-		if ! response=$(xmplRead "Do you want to download repository and use it locally? [Y/n]");then
-			return 1
-		fi	
+		echo -e "Do you want to download repository and use it locally? [Y/n]" >&2
+		read response
 
 		response=${response,,} # tolower
 		if [[ $response =~ ^(yes|y| ) ]] || [[ -z $response ]]; then
@@ -175,10 +171,8 @@ function installLocal {
 
 		fi
 		
-		
-		if ! response=$(xmplRead "Do you want to create a private repository on GitHub, and share your examples with community? [Y/n]");then
-			return 1
-		fi	
+		echo -e "Do you want to create a private repository on GitHub, and share your examples with community? [Y/n]" >&2
+		read  response
 
 		response=${response,,} # tolower
 		if [[ $response =~ ^(yes|y| ) ]] || [[ -z $response ]]; then
@@ -200,9 +194,9 @@ function uninstallLocal {
 	   return
 	fi
 
-	if ! response=$(xmplRead "This will remove xmpl script from your system. Are you sure? [Y/n]");then
-		return
-	fi	
+	echo -e "This will remove xmpl script from your system. Are you sure? [Y/n]" >&2
+	read response
+
 	response=${response,,} # tolower
 	if [[ $response =~ ^(yes|y| ) ]] || [[ -z $response ]]; then
 		#Remove Aaliass 
@@ -210,9 +204,9 @@ function uninstallLocal {
 		su $XMPL_USER -c "uninstallSourced"
 		#Remove script
 		rm -f /usr/local/bin/xmpl
-		if ! response2=$(xmplRead "Do you want to remove all your local repositories? [Y/n]");then
-			return
-		fi	
+		echo -e "Do you want to remove all your local repositories? [Y/n]" >&2
+		read response2
+
 		 response2=${response2,,} # tolower
 		 if [[ $response2 =~ ^(yes|y| ) ]] || [[ -z $response2 ]]; then
 			#Remove local data
@@ -295,22 +289,19 @@ function addNewRepository {
 	if [[ "$validRepo" -ge "1" ]];then
 		echo -e "\e[33mNew repository from GitHub source '$toFork'\e[39m" >&2
 		while [ -z $user ];do
-			if ! user=$(xmplRead "Enter GitHub username:");then
-				return 1
-			fi	
+			echo -e "Enter GitHub username:" >&2
+			read -e user	
 		done
 
 		while [ -z $repoAlias ];do
-			if ! repoAlias=$(xmplRead "Enter local repository alias:");then
-				return 1
-			fi	
+			echo -e "Enter local repository alias:" >&2
+			read -e repoAlias	
 		done
 		
 		if [ -f ${XMPL_HOME}/.xmpl/repos/$user/$repoName/commands.repo ];then
-			
-			if ! response=$(xmplRead "Repository already exist! Overwrite local repository? [y/N]");then
-				return 1
-			fi	
+			echo -e "Repository already exist! Overwrite local repository? [y/N]" >&2
+			read response
+	
 		else
 			response="y"
 		fi
@@ -355,9 +346,8 @@ function forkRepository {
 
 	while : ;do
 		while [ -z $user ];do
-			if ! user=$(xmplRead "Enter GitHub username:");then
-				return 1
-			fi	
+			echo -e "Enter GitHub username:"
+			read -e user	
 		done
 	
 		repoStatus1=$(curl --silent  https://api.github.com/repos/$user/$repoName --stderr - | jq '.id')
@@ -407,10 +397,9 @@ function delLocalRepository {
 		fi
 
 		XMPL_REPO=$(grep -oP "$XMPL_CURRENT_REPO *= *\K.*" ${XMPL_HOME}/.xmpl/repo.conf)
+		echo -e "Delete local repository '$XMPL_CURRENT_REPO' ($XMPL_REPO)?  [y/N]" >&2
+		read response
 
-		if ! response=$(xmplRead "Delete local repository '$XMPL_CURRENT_REPO' ($XMPL_REPO)?  [y/N]");then
-			return 1
-		fi
 		response=${response,,} # tolower
 		if [[ $response =~ ^(yes|y) ]]; then
 			if [ $XMPL_CURRENT_REPO != 'main' ];then
@@ -449,9 +438,9 @@ function syncRepository {
 		if [ "$status" != "behind" ];then
 			
 			if [ $XMPL_USERNAME == 'xmpl-tool' ];then
-				if ! response=$(xmplRead "Do you want to synchronize '$XMPL_CURRENT_REPO' repository? [Y/n]");then
-					return 1
-				fi
+				echo -e "Do you want to synchronize '$XMPL_CURRENT_REPO' repository? [Y/n]" >&2
+				read response
+
 				response=${response,,} # tolower
 				if [[ $response =~ ^(yes|y| ) || -z $response ]]; then
 					git pull >&2
@@ -466,9 +455,9 @@ function syncRepository {
 			cd $tpwd
 			return
 		else
-			if ! response=$(xmplRead "Do you want to synchronize '$XMPL_CURRENT_REPO' repository? [Y/n]");then
-				return 1
-			fi
+			echo -e "Do you want to synchronize '$XMPL_CURRENT_REPO' repository? [Y/n]" >&2
+			read response
+
 			response=${response,,} # tolower
 			if [[ $response =~ ^(yes|y| ) || -z $response ]]; then
 				git pull >&2
@@ -494,10 +483,9 @@ function syncRepository {
 	fcnt=$(echo "$changes" | wc -l) 
 	echo "$fcnt file/s changed!" >&2
 	echo "$changes" >&2
-	if ! response=$(xmplRead "Do you want to synchronize '$XMPL_CURRENT_REPO' repository? [Y/n]");then
-		cd $tpwd
-		return 1
-	fi
+	echo -e "Do you want to synchronize '$XMPL_CURRENT_REPO' repository? [Y/n]" >&2
+	read response
+
 	response=${response,,} # tolower
 	if [[ $response =~ ^(yes|y| ) || -z $response ]]; then
 		if [ $XMPL_USERNAME != 'xmpl-tool' ];then
@@ -511,12 +499,10 @@ function syncRepository {
 			git commit -m "${commitMsg}" >&2
 			while : ;do
 				git push origin master >&2 && break
-					if ! response=$(xmplRead "Try again? [Y/n]");then
-						cd $tpwd
-						return 1
-					fi
+					echo -e "Try again? [Y/n]" >&2
+					read response
 					response=${response,,} # tolower
-					if ! [[ $response =~ ^(yes|y| ) ]] || ! [[ -z $response ]]; then
+					if [[ $response =~ ^(no|n) ]]; then
 						break
 					fi
 			done
@@ -546,23 +532,27 @@ function pullRepository {
 		status=$(curl --silent https://api.github.com/repos/xmpl-tool/xmpl-repo/compare/xmpl-tool:master...$XMPL_USERNAME:master --stderr - | jq -r '.status')
 		
 		if [ "$status" != "identical" ];then
-			if ! prTitle=$(xmplRead "Enter pull request title:");then
-				return 1
-			fi	
-			if ! prBody=$(xmplRead "Enter pull request body:");then
-				return 1
-			fi	
-
+		
+			while [ -z $prTitle ];do
+				echo -e "Enter pull request title:" >&2
+				read -e prTitle
+			done;
+			
+			while [ -z $prBody ] ;do
+				echo -e "Enter pull request body:" >&2
+				read -e prBody
+			done;
+			
 			while : ;do 
 				if curl --silent -u ${XMPL_USERNAME} https://api.github.com/repos/xmpl-tool/xmpl-repo/pulls -d "{ \"title\": \"$prTitle\", \"body\": \"$prBody\", \"head\": \"$XMPL_USERNAME:master\", \"base\": \"master\" }" -f 1>/dev/null;then
 					echo -e "\e[33mPull request successfull!\e[39m" >&2
 					break
 				else
-					if ! response=$(xmplRead "Wrong password for user '$XMPL_USERNAME'!\nTry again? [Y/n]");then
-						return 1
-					fi
+					echo -e "Wrong password for user '$XMPL_USERNAME'!\nTry again? [Y/n]" >&2
+					read response
+
 					response=${response,,} # tolower
-					if ! [[ $response =~ ^(yes|y| ) ]] || ! [[ -z $response ]]; then
+					if [[ $response =~ ^(no|n) ]]; then
 						break
 					fi
 				fi
@@ -810,10 +800,8 @@ function executeMode {
 									parm=${XMPL_INPUTS[$a]}
 								else
 									echo -e $arg:"\c" | sed -e 's/{://' -e 's/:}//' >&2 #Asking user to input argument
-									if ! parm=$(xmplRead "");then
-										#byebye
-										return 1
-									fi
+									read -e parm
+
 									XMPL_INPUTS+=$parm
 									#read parm #Reading user input
 								fi
@@ -880,16 +868,15 @@ function xmplEditor {
 	fi
 
 	while [ -z ${package} ];do
-		if ! package=$(xmplRead "Enter package name:");then
-			return 1
-		fi	
+		echo -e "Enter package name:" >&2
+		read -e package
 	done
 	
 		if [[ ! -z ${package} ]];then
 			if ! [ -f ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package/$package.desc >& /dev/null ] ;then
-				if ! response=$(xmplRead "Create new package '${package}'? [Y/n]");then
-					return 1
-				fi
+				echo -e "Create new package '${package}'? [Y/n]" >&2
+				read response
+
 				response=${response,,} # tolower
 					if [[ $response =~ ^(yes|y| ) ]] || [[ -z ${response} ]]; then
 						
@@ -898,13 +885,10 @@ function xmplEditor {
 						
 						while ! [[ $response2 =~ ^(yes|y) ]] 2>/dev/null; do
 							input=0 #Set input to 0	
-							if ! input=$(xmplRead "Please enter description for package '$package':" "");then
-								return 1
-							fi
-
-							if ! response2=$(xmplRead "Is this description correct? [y/N]" "");then
-								return 1
-							fi
+							eho -e "Please enter description for package '$package':"
+							read -e input
+							echo -e "Is this description correct? [y/N]"
+							read response2
 
 							response2=${response2,,} # tolower
 						done
@@ -957,16 +941,12 @@ function xmplEditor {
 				response2=NO
 				
 					while [[ ! $response2 =~ ^(yes|y) ]]; do
-					
-						if ! title=$(xmplRead "Enter example title:" $title);then
-							return 1
-						fi				
-					
-					if ! response2=$(xmplRead "Is this title correct? [y/N]" "");then
-						return 1
-					fi
+						echo -e "Enter example title:" >&2
+						read -e -i "$title" title 
+						echo -e "Is this title correct? [y/N]" >&2
+						read response2
 
-					response2=${response2,,} # tolower
+						response2=${response2,,} # tolower
 					done
 				done
 				
@@ -976,14 +956,11 @@ function xmplEditor {
 			while : ;do
 			response2=NO
 				while [[ ! $response2 =~ ^(yes|y) ]]; do
-				
-					if ! data=$(xmplRead "Enter command with input variable structure {:variable name:}" $data);then
-						return 1
-					fi					
-				
-					if ! response2=$(xmplRead "Is this command correct? [y/N]" "");then
-						return 1
-					fi
+					echo -e "Enter command with input variable structure {:variable name:}" >&2
+					read -e -i "$data" data				
+					echo -e "Is this command correct? [y/N]" >&2
+					read response2
+
 					response2=${response2,,} # tolower
 				done
 				[ -z ${data} ] || break
@@ -992,14 +969,11 @@ function xmplEditor {
 			while : ;do
 			response2=NO
 				while [[ ! $response2 =~ ^(yes|y) ]] 2>/dev/null; do
-				
-					if ! tags=$(xmplRead "Edit search tags:" $tags);then
-						return 1
-					fi				
-				
-					if ! response2=$(xmplRead "Is this correct? [y/N]" "");then
-						return 1
-					fi
+					echo -e "Edit search tags:" >&2
+					read -e -i "$tags" tags		
+					echo -e "Is this correct? [y/N]" >&2
+					read response2
+
 					response2=${response2,,} # tolower
 				
 				done
@@ -1052,6 +1026,7 @@ function intersectionGrep {
 	done
 	echo "$first"
 }
+
 
 function xmplRead {
 
