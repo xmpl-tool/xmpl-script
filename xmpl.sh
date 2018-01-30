@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# xmpl-tool v1.0.2
+# xmpl-tool v1.0.3
 # Author: Ivan Krpan
-# Date: 28.01.2018
+# Date: 30.01.2018
 
 ##################################################################
 # EXIT FUNCTIONS
@@ -15,7 +15,7 @@ function byebye {
 	unset -f uninstallSourced
 	
 	unset i repo package status git_repo XMPL_OUTPUT OPTARG OPTIND flag inputs old_inputs query flags XMPL_REPO oIFS XMPL_PACKAGE XMPL_QUERY XMPL_LAST_REPO_UPDATE XMPL_DEFAULT_REPO
-	unset XMPL_USER XMPL_HOME XMPL_MODE_QUERY XMPL_MODE_EDIT XMPL_MODE_RAW XMPL_MODE_INPUT XMPL_MODE_EXECUTE XMPL_MODE_ONLINE XMPL_MODE_HISTORY XMPL_MODE_NULL fkey
+	unset XMPL_USER XMPL_HOME XMPL_MODE_QUERY XMPL_MODE_EDIT XMPL_MODE_RAW XMPL_MODE_INPUT XMPL_MODE_EXECUTE XMPL_MODE_ONLINE XMPL_MODE_HISTORY XMPL_MODE_NULL fkey version
 	
 	trap - INT
 	echo -e "\e[39m\c" >&2
@@ -99,54 +99,55 @@ function installLocal {
 
 	#Check permissions
 	if [[ $EUID -ne 0 ]]; then
-	   echo -e "\e[33mFor xmpl installation, run this command as root!\e[39m" >&2
+	   echo -e "\e[33mFor xmpl-tool installation, run this command as root!\e[39m" >&2
 	   return
 	fi
 	
-	echo -e "Do you really want to install xmpl on your local system? [Y/n]" >&2
+	echo -e "Do you really want to install xmpl-tool $version on your local system? [Y/n]" >&2
 	read response
 
 	response=${response,,} # tolower
 	if [[ $response =~ ^(yes|y| ) ]] || [[ -z $response ]]; then
 		
+		if ! checkRequirements > /dev/null;then
+			#OS check
+			declare -A osInfo;
+			osInfo[/etc/redhat-release]=yum
+			osInfo[/etc/arch-release]=pacman
+			osInfo[/etc/gentoo-release]=emerge
+			osInfo[/etc/SuSE-release]=zypp
+			osInfo[/etc/debian_version]=apt-get
+
+			for f in ${!osInfo[@]}
+			do
+				if [[ -f $f ]];then
+					packageManager=${osInfo[$f]}
+				fi
+			done
+			#installing requirement packages
+			case $packageManager in
+					"apt-get" ) 
+					apt-get update && apt-get install curl jq git
+					;;
+					"zypp" ) 
+					zypper ref && zypper in curl jq git
+					;;
+					"emerge" ) 
+					emerge --sync && emerge -pv net-misc/curl app-misc/jq dev-vcs/git
+					;;
+					"pacman" ) 
+					pacman -Sy curl jq git
+					;;
+					"yum" ) 
+					yum install curl jq git
+					;;
+					* ) 
+					echo -e "\e[33mOS not supported!\e[39m" >&2
+					return
+					;;
+			esac
+		fi
 		
-		#OS check
-		declare -A osInfo;
-		osInfo[/etc/redhat-release]=yum
-		osInfo[/etc/arch-release]=pacman
-		osInfo[/etc/gentoo-release]=emerge
-		osInfo[/etc/SuSE-release]=zypp
-		osInfo[/etc/debian_version]=apt-get
-
-		for f in ${!osInfo[@]}
-		do
-			if [[ -f $f ]];then
-				packageManager=${osInfo[$f]}
-			fi
-		done
-		#installing requirement packages
-		case $packageManager in
-				"apt-get" ) 
-				apt-get update && apt-get install curl jq git
-				;;
-				"zypp" ) 
-				zypper ref && zypper in curl jq git
-				;;
-				"emerge" ) 
-				emerge --sync && emerge -pv net-misc/curl app-misc/jq dev-vcs/git
-				;;
-				"pacman" ) 
-				pacman -Sy curl jq git
-				;;
-				"yum" ) 
-				yum install curl jq git
-				;;
-				* ) 
-				echo -e "\e[33mOS not supported!\e[39m" >&2
-				return
-				;;
-		esac
-
 		#Install Script
 		SCRIPTPATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 		cp $SCRIPTPATH /usr/local/bin/xmpl
@@ -157,7 +158,7 @@ function installLocal {
 		
 		su $XMPL_USER -c "installSourced"
 		
-		echo -e "\n\e[33mXMPL installed successfully!\e[39m" >&2
+		echo -e "\e[33mxmpl-tool installed successfully!\e[39m" >&2
 		
 		
 		#Install Repo
@@ -176,6 +177,7 @@ function installLocal {
 
 		response=${response,,} # tolower
 		if [[ $response =~ ^(yes|y| ) ]] || [[ -z $response ]]; then
+
 			addNewRepository '' '' 'xmpl-tool/xmpl-repo'
 		fi
 		 
@@ -185,16 +187,35 @@ function installLocal {
 	fi
 }
 
-function uninstallLocal {
+function updateLocal {
+	
+	#Check permissions
+	if [[ $EUID -ne 0 ]]; then
+	   echo -e "\e[33mTo update xmpl-tool, run this command as root!\e[39m" >&2
+	   return
+	fi
+
+	echo -e "This will update xmpl-tool to latest version! Are you sure? [Y/n]" >&2
+	read response	
+	
+	response=${response,,} # tolower
+	if [[ $response =~ ^(yes|y| ) ]] || [[ -z $response ]]; then
+		$(curl -o /usr/local/bin/xmpl https://raw.githubusercontent.com/xmpl-tool/xmpl-script/master/xmpl.sh)
+		echo -e "\e[33mxmpl-tool is updated to latest version!\e[39m" >&2
+	fi
+
+}
+
+function deinstallLocal {
 
 	local response response2
 	#Check permissions
 	if [[ $EUID -ne 0 ]]; then
-	   echo -e "\e[33mFor uninstalling xmpl, run this command as root!\e[39m" >&2
+	   echo -e "\e[33mFor uninstalling xmpl-tool, run this command as root!\e[39m" >&2
 	   return
 	fi
 
-	echo -e "This will remove xmpl script from your system. Are you sure? [Y/n]" >&2
+	echo -e "This will remove xmpl-tool from your system. Are you sure? [Y/n]" >&2
 	read response
 
 	response=${response,,} # tolower
@@ -766,7 +787,7 @@ function executeMode {
 			else
 				echo -e "$epath: $ename" >&2  #Print package name and exemple title to stdout
 			fi
-			echo -e "\e[39m\c" >&2 #Color green
+			echo -e "\e[39m\c" >&2 #Color default
 			
 				if [ $XMPL_MODE_ONLINE -ge 1 ];then
 					raw=$(echo -e $eurl | sed -e 's/https:\/\/github.com/https:\/\/raw.githubusercontent.com/; s/\/blob\//\//;') #Replacing html url with raw url
@@ -782,7 +803,7 @@ function executeMode {
 					data=$(echo "$data" | sed '/^[[:blank:]]*#/d;s/#.*//' ) #Get example raw data and remove comments
 				fi				
 				
-				XMPL_RESOLUTE=$data
+				XMPL_RESULT=$data
 				if [[ $XMPL_MODE_INPUT == 1 ]]; then #User puts arguments
 					arguments=$(echo $data | grep -Po '{:[^:]*:}') #Get all arguments from example
 					
@@ -796,37 +817,48 @@ function executeMode {
 					for arg in $arguments #For each argument
 					do
 						if [[ ${arg} != '' ]]; then #If argument exists 
-								if [[ ${XMPL_INPUTS[$a]} != '' ]];then
+								if [[ ! -z ${XMPL_INPUTS[$a]} ]] ;then
+	
 									parm=${XMPL_INPUTS[$a]}
 								else
-									echo -e $arg:"\c" | sed -e 's/{://' -e 's/:}//' >&2 #Asking user to input argument
-									read -e parm
+									trap 'return' INT
+									echo -e "\e[36m$arg:\e[39m" | sed -e 's/{://' -e 's/:}//' >&2 #Asking user to input argument
+									if [ "$XMPL_LAST_URL" == "$eurl" ];then
+										read -e -i "${old_inputs[$a]}" parm
+									else
+										read -e parm
+									fi
+									
+									trap - INT
 
-									XMPL_INPUTS+=$parm
+									XMPL_INPUTS+=($parm)
 									#read parm #Reading user input
 								fi
-														
-								parm=$(echo -e "$parm" | sed -e 's/\\/\\\\/g; s/\//\\\//g; s/&/\\\&/g')
-								XMPL_RESOLUTE=$(echo -e "$XMPL_RESOLUTE" | sed -e "s/$arg/$parm/") #Putting argument in command
-					
+
+								#parms ecape chars 3x
+								parm=$(echo "${parm%% }" | sed -e 's/\\/\\\\/g; s/&/\\\&/g;s/ /\\ /g;' | sed -e 's/\\/\\\\\\\\/g;' )
+
+								XMPL_RESULT=$(echo "$XMPL_RESULT" | sed -e 's,'"$arg"','"$parm"',') #Putting argument in command
+
 							a=$((a+1))
 						fi
 					done
-				
+					
+					XMPL_RESULT=$(echo "$XMPL_RESULT" | sed -e "s/'/\\\'/g" | sed -e 's/"/\\\"/g')
 					echo -e "\e[92m\c" >&2 #Color green
 					
 					if [[ $XMPL_MODE_INPUT == 1 ]] && [[ $XMPL_MODE_EXECUTE == 0 ]]; then #If input mode
-						echo "$XMPL_RESOLUTE" #Print results to stdout
+						echo $(eval echo "$XMPL_RESULT") #Print evaled result to stdout
 					else #if execute mode
-						echo "$XMPL_RESOLUTE" >&2 #Print results to stderr
+						echo $(eval echo "$XMPL_RESULT") >&2 #Print evaled result to stderr
 					fi
 					
 					echo -e "\e[39m\c" >&2 #Color default
 						
 					if [[ $XMPL_MODE_EXECUTE == 1 ]]; then
-						echo 2>/dev/null "$XMPL_RESOLUTE" 1>&3 #Print results to stdout2 only
+						echo 2>/dev/null "$XMPL_RESULT" 1>&3 #Print results to stdout2 only
 						
-						eval $(echo "$XMPL_RESOLUTE" | sed '/^[[:blank:]]*#/d;s/#.*//' ) #Remove comments and execute command
+						eval $(eval echo "$XMPL_RESULT" | sed '/^[[:blank:]]*#/d;s/#.*//' ) #Remove comments and execute pre-evaled command
 						if [ $? -eq 0 ]; then
 							echo -e "\e[35mEXECUTED\e[39m" >&2 #Command executed
 						else
@@ -836,7 +868,7 @@ function executeMode {
 					
 				else
 					echo -e "\e[92m\c" >&2 #Color green
-					echo "$XMPL_RESOLUTE" #Print results to stdout
+					echo "$XMPL_RESULT" #Print results to stdout
 					echo -e "\e[39m\c" >&2 #Color default
 				fi
 			
@@ -1144,10 +1176,11 @@ function showHelp {
 	echo "	"
     echo "	-I				Install on local system"
 	if [ -f ${XMPL_HOME}/.xmpl/repo.conf ];then
-		echo "	-U			 	Uninstall from local system"
+		echo "	-U			 	Update to latest version"
+		echo "	-D			 	Deinstall from local system"
 		echo "	"
-		echo "	-N [github_user/repo]		Add new private repository"	  
-		echo "	-D [repo_alias]			Delete local repository"	  
+		echo "	-n [github_user/repo]		Add new private repository"	  
+		echo "	-d [repo_alias]			Delete local repository"	  
 		echo "	"
 		echo "	-r [repo_alias]			Switch repository source"	  
 		echo "	-R [repo_alias]			Switch and store repository source"
@@ -1156,14 +1189,19 @@ function showHelp {
 		echo "	"
 		echo "	-S [repo_alias]			Synchronize local repository with GitHub repository"
 		echo "	-P [repo_alias]			Send changes to xmpl main repository"
+		echo "	"
+		
 	fi
-	echo "	"
+	echo "	-v				Display version"
 	echo "	-? / -h				Show xmpl help page"
 	echo "	"
+
 }
 
 ##################################################################
 # MAIN SCRIPT
+
+version='1.0.3'
 
 oIFS=$IFS 	#Saving old IFS
 IFS=$'\n' 	#Delimiter to new line
@@ -1192,12 +1230,12 @@ XMPL_DEFAULT_REPO='main' #set default repo to main
 
 OPTIND=1 #setting option index to 1
 
-flags=":spcOixlXIh?" #noinstal mode
+flags=":spcOixlXIhv?" #noinstal mode
 
 #if xmpl is installed
 if [ -f ${XMPL_HOME}/.xmpl/xmpl.conf ];then
 	source ${XMPL_HOME}/.xmpl/xmpl.conf #load conf
-	flags=":spcoOixlXIUNDrReSPh?" 		#full mode
+	flags=":spcoOixlXIUDndrReSPhv?" 		#full mode
 fi
 #current repo = default repo
 XMPL_CURRENT_REPO=$XMPL_DEFAULT_REPO 
@@ -1220,7 +1258,7 @@ until [[ $(eval "echo \${$OPTIND}") =~ ^-.* ]] || [[ -z $(eval "echo \${$OPTIND}
 done
 
 #save old inputs
-old_inputs="${XMPL_INPUTS[@]}"
+old_inputs=(${XMPL_INPUTS[@]})
 unset XMPL_INPUTS
 
 # Parse options to the `xmpl` command
@@ -1285,6 +1323,8 @@ while getopts $flags flag; do
 				XMPL_INPUTS+=($(eval "echo \${$OPTIND}"))
 				shift
 		done
+		
+		
 	;;
 	l )
 		#last command
@@ -1307,7 +1347,7 @@ while getopts $flags flag; do
 		done
 		#if no inputs, use last inputs
 		if [ -z $XMPL_INPUTS ];then
-			XMPL_INPUTS="${old_inputs[@]}"
+			XMPL_INPUTS=(${old_inputs[@]})
 		fi
 		#check for last command
 		if [ -z $XMPL_LAST_PATH ];then
@@ -1326,14 +1366,22 @@ while getopts $flags flag; do
 		fi
 	;;
 	U )
-		#Uninstll local
-		uninstallLocal
+		#Update script
+		updateLocal
 		byebye #?
 		if ! return >& /dev/null; then
 			exit
 		fi
 	;;
-	N )
+	D )
+		#Deinstall local
+		deinstallLocal
+		byebye #?
+		if ! return >& /dev/null; then
+			exit
+		fi
+	;;
+	n )
 		#New repo
 		#get GitHub repo
 		until [[ $(eval "echo \${$OPTIND}") =~ ^-.* ]] || [[ -z $(eval "echo \${$OPTIND}") ]];do
@@ -1359,7 +1407,7 @@ while getopts $flags flag; do
 			exit
 		fi
 	;;
-	D )
+	d )
 		#delete repo
 		unset repo
 		#get repo alias
@@ -1438,6 +1486,14 @@ while getopts $flags flag; do
 	h )
 		#Show help
 		XMPL_OUTPUT="$(showHelp)"
+		XMPL_MODE_NULL=1
+		if [ ! return >& /dev/null ];then
+			exit
+		fi
+	;;
+	v )
+		#Show version
+		echo -e "\e[33mxmpl-tool $version\e[39m"
 		XMPL_MODE_NULL=1
 		if [ ! return >& /dev/null ];then
 			exit

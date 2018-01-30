@@ -32,10 +32,11 @@ sudo bash xmpl.sh -I
         -X [<arguments>]                Execute last selected example
 
         -I                              Install on local system
-        -U                              Uninstall from local system
+        -U                              Update to latest version
+        -D                              Deinstall from local system
 
-        -N [github_user/repo]           Add new private repository
-        -D [repo_alias]                 Delete local repository
+        -n [github_user/repo]           Add new private repository
+        -d [repo_alias]                 Delete local repository
 
         -r [repo_alias]                 Switch repository source
         -R [repo_alias]                 Switch and store repository source
@@ -45,5 +46,6 @@ sudo bash xmpl.sh -I
         -S [repo_alias]                 Synchronize local repository with GitHub repository
         -P [repo_alias]                 Send changes to xmpl main repository
 
+        -v                              Display version
         -? / -h                         Show xmpl help page
 ```
