@@ -817,15 +817,21 @@ function executeMode {
 					for arg in $arguments #For each argument
 					do
 						if [[ ${arg} != '' ]]; then #If argument exists 
-								if [[ ${XMPL_INPUTS[$a]} != '' ]];then
+								if [[ ! -z ${XMPL_INPUTS[$a]} ]] ;then
+	
 									parm=${XMPL_INPUTS[$a]}
 								else
 									trap 'return' INT
 									echo -e "\e[36m$arg:\e[39m" | sed -e 's/{://' -e 's/:}//' >&2 #Asking user to input argument
-									read -e parm
+									if [ "$XMPL_LAST_URL" == "$eurl" ];then
+										read -e -i "${old_inputs[$a]}" parm
+									else
+										read -e parm
+									fi
+									
 									trap - INT
 
-									XMPL_INPUTS+=$parm
+									XMPL_INPUTS+=($parm)
 									#read parm #Reading user input
 								fi
 
@@ -1252,7 +1258,7 @@ until [[ $(eval "echo \${$OPTIND}") =~ ^-.* ]] || [[ -z $(eval "echo \${$OPTIND}
 done
 
 #save old inputs
-old_inputs="${XMPL_INPUTS[@]}"
+old_inputs=(${XMPL_INPUTS[@]})
 unset XMPL_INPUTS
 
 # Parse options to the `xmpl` command
@@ -1317,6 +1323,8 @@ while getopts $flags flag; do
 				XMPL_INPUTS+=($(eval "echo \${$OPTIND}"))
 				shift
 		done
+		
+		
 	;;
 	l )
 		#last command
@@ -1339,7 +1347,7 @@ while getopts $flags flag; do
 		done
 		#if no inputs, use last inputs
 		if [ -z $XMPL_INPUTS ];then
-			XMPL_INPUTS="${old_inputs[@]}"
+			XMPL_INPUTS=(${old_inputs[@]})
 		fi
 		#check for last command
 		if [ -z $XMPL_LAST_PATH ];then
