@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# xmpl-tool v1.0.3
+# xmpl-tool v1.0.4
 # Author: Ivan Krpan
-# Date: 30.01.2018
+# Date: 31.01.2018
 
 ##################################################################
 # EXIT FUNCTIONS
@@ -158,7 +158,7 @@ function installLocal {
 		
 		su $XMPL_USER -c "installSourced"
 		
-		echo -e "\e[33mxmpl-tool installed successfully!\e[39m" >&2
+		echo -e "\e[33mxmpl-tool $version installed successfully!\e[39m" >&2
 		
 		
 		#Install Repo
@@ -188,7 +188,7 @@ function installLocal {
 }
 
 function updateLocal {
-	
+	local newVersion
 	#Check permissions
 	if [[ $EUID -ne 0 ]]; then
 	   echo -e "\e[33mTo update xmpl-tool, run this command as root!\e[39m" >&2
@@ -201,7 +201,8 @@ function updateLocal {
 	response=${response,,} # tolower
 	if [[ $response =~ ^(yes|y| ) ]] || [[ -z $response ]]; then
 		$(curl -o /usr/local/bin/xmpl https://raw.githubusercontent.com/xmpl-tool/xmpl-script/master/xmpl.sh)
-		echo -e "\e[33mxmpl-tool is updated to latest version!\e[39m" >&2
+		newVersion=`xmpl -v`
+		echo -e "\e[33mxmpl-tool is updated to latest version (${newVersion##* }\e[33m)!\e[39m" >&2
 	fi
 
 }
@@ -824,27 +825,25 @@ function executeMode {
 									trap 'return' INT
 									echo -e "\e[36m$arg:\e[39m" | sed -e 's/{://' -e 's/:}//' >&2 #Asking user to input argument
 									if [ "$XMPL_LAST_URL" == "$eurl" ];then
-										read -e -i "${old_inputs[$a]}" parm
+										read -e -i "${old_inputs[$a]}" parm #read input with last input suggestion
 									else
-										read -e parm
+										read -e parm #read new input
 									fi
-									
 									trap - INT
 
 									XMPL_INPUTS+=($parm)
-									#read parm #Reading user input
 								fi
 
 								#parms ecape chars 3x
-								parm=$(echo "${parm%% }" | sed -e 's/\\/\\\\/g; s/&/\\\&/g;s/ /\\ /g;' | sed -e 's/\\/\\\\\\\\/g;' )
+								parm=$(echo "${parm%% }" | sed -e 's/\\/\\\\/g; s/ /\\ /g;' | sed -e 's/\\/\\\\\\\\/g; s/&/\\\\\\&/g;' )
 
-								XMPL_RESULT=$(echo "$XMPL_RESULT" | sed -e 's,'"$arg"','"$parm"',') #Putting argument in command
+								XMPL_RESULT=$(echo $XMPL_RESULT | sed -e 's,'"$arg"','"$parm"',') #Putting argument in command
 
 							a=$((a+1))
 						fi
 					done
-					
-					XMPL_RESULT=$(echo "$XMPL_RESULT" | sed -e "s/'/\\\'/g" | sed -e 's/"/\\\"/g')
+					#prepare result for execution
+					XMPL_RESULT=$(echo "$XMPL_RESULT" | sed -e "s/'/\\\'/g;" | sed -e 's/"/\\\"/g; s/&/\\\\&/g;')
 					echo -e "\e[92m\c" >&2 #Color green
 					
 					if [[ $XMPL_MODE_INPUT == 1 ]] && [[ $XMPL_MODE_EXECUTE == 0 ]]; then #If input mode
@@ -856,9 +855,12 @@ function executeMode {
 					echo -e "\e[39m\c" >&2 #Color default
 						
 					if [[ $XMPL_MODE_EXECUTE == 1 ]]; then
-						echo 2>/dev/null "$XMPL_RESULT" 1>&3 #Print results to stdout2 only
+
+						#eval echo to convert ~ to path
+						XMPL_RESULT=$(eval echo "$XMPL_RESULT" | sed '/^[[:blank:]]*#/d;s/#.*//') #Remove comments and execute pre-evaled command
 						
-						eval $(eval echo "$XMPL_RESULT" | sed '/^[[:blank:]]*#/d;s/#.*//' ) #Remove comments and execute pre-evaled command
+						echo 2>/dev/null "$XMPL_RESULT" 1>&3 #Print results to stdout2 only
+						eval "$XMPL_RESULT"
 						if [ $? -eq 0 ]; then
 							echo -e "\e[35mEXECUTED\e[39m" >&2 #Command executed
 						else
@@ -1150,58 +1152,77 @@ function showHelp {
 	echo "	"
 	if [ -f ${XMPL_HOME}/.xmpl/repo.conf ];then
 		echo "Full usage:"
+		echo "	"
+		echo -e " \e[1mxmpl\e[0m"
+		echo -e "	\e[1mfilter_1 filter_2\e[0m"
+		echo -e "	[--search] \e[1mfilter_1 filter_2\e[0m"
+		echo -e "	[--package] [--edit] \e[1mpackage\e[0m"
+		echo -e "	[--input] [--execute] [--execute-last] \e[1margument_1 argument_2\e[0m"
+		echo -e "	[--new-repo] \e[1mgithub_user/repo\e[0m"
+		echo -e "	[--delete-repo] [--change-repo] [--save-repo]"
+		echo -e "	[--sync-repo] [--pull-request] \e[1mrepo_alias\e[0m"
+		echo -e "	[--comments] [--online] [--full-online] [--last] [--install]"
+		echo -e "	[--update] [--deinstall] [--version] [--help]"
 	else
 		echo "No-install usage:"
+		echo "	"
+		echo -e " \e[1mxmpl\e[0m"
+		echo -e "	\e[1mfilter_1 filter_2\e[0m"
+		echo -e "	[ --search ] \e[1mfilter_1 filter_2\e[0m"
+		echo -e "	[ --package ] \e[1mpackage\e[0m"
+		echo -e "	[ --input --execute --execute-last ] \e[1margument_1 argument_2\e[0m"
+		echo -e "	[ --comments --full-online --last --install --version --help ]"
 	fi	  
-	echo "	"
-	echo -e "  \e[1mxmpl\e[0m 					List available packages"
-	echo "	"
-	echo "	[<query>]			Search all examples with query"
-	echo "	"	  
-	echo "	-s [<query>]			Search examples with query"
-	echo "	-p [package]			Filter by package"		  
-	echo "	"	  
-	echo "	-c				Display comments in examples"
-	echo "	"	  	
+	echo ""
+	echo ""
+	echo -e " \e[1mxmpl\e[0m 					List available packages"
+	echo " "
+	echo "   [<query>]				Search all examples with query"
+	echo "  "	  
+	echo "   -s [<query>]		 --search	Search examples with query"
+	echo "   -p [package]		 --package	Filter by package"		  
+	echo "  "	  
+	echo "   -c			 --comments	Display comments in examples"
+	echo "  "	  	
 	if [ -f ${XMPL_HOME}/.xmpl/repo.conf ];then
-		echo "	-o 				Force online working mode"
+		echo "   -o 			 --online	Force online mode"
 	fi
-	echo "	-O 				Force online working mode with descriptions"
-	echo "	"
-	echo "	-i [<arguments>]		Input mode"
-	echo "	-x [<arguments>]		Execute mode"
-	echo "	"
-	echo "	-l				Show last selected example"
-	echo "	-X [<arguments>]		Execute last selected example"
-	echo "	"
-    echo "	-I				Install on local system"
+	echo "   -O 			 --full-online	Force online mode with descriptions"
+	echo "   "
+	echo "   -i [<arguments>]	 --input	Input mode"
+	echo "   -x [<arguments>]	 --execute	Execute mode"
+	echo "   "
+	echo "   -l			 --last		Show last selected example"
+	echo "   -X [<arguments>]	 --execute-last	Execute last selected example"
+	echo "  "
+    echo "   -I			 --install	Install on local system"
 	if [ -f ${XMPL_HOME}/.xmpl/repo.conf ];then
-		echo "	-U			 	Update to latest version"
-		echo "	-D			 	Deinstall from local system"
-		echo "	"
-		echo "	-n [github_user/repo]		Add new private repository"	  
-		echo "	-d [repo_alias]			Delete local repository"	  
-		echo "	"
-		echo "	-r [repo_alias]			Switch repository source"	  
-		echo "	-R [repo_alias]			Switch and store repository source"
-		echo "	"
-		echo "	-e [package]			Edit package in private repository"
-		echo "	"
-		echo "	-S [repo_alias]			Synchronize local repository with GitHub repository"
-		echo "	-P [repo_alias]			Send changes to xmpl main repository"
+		echo "   -U			 --update	Update to latest version"
+		echo "   -D			 --deinstall	Deinstall from local system"
+		echo "   "
+		echo "   -n [github_user/repo] --new-repo	Add new private repository"	  
+		echo "   -d [repo_alias]	 --delete-repo	Delete local repository"	  
+		echo "   "
+		echo "   -r [repo_alias]	 --change-repo	Switch repository source"	  
+		echo "   -R [repo_alias]	 --save-repo	Switch and store repository source"
+		echo "   "
+		echo "   -e [package]		 --edit		Edit package in private repository"
+		echo "   "
+		echo "   -S [repo_alias]	 --sync-repo	Synchronize local and remote repository"
+		echo "   -P [repo_alias]	 --pull-request	Send changes to xmpl main repository"
 		echo "	"
 		
 	fi
-	echo "	-v				Display version"
-	echo "	-? / -h				Show xmpl help page"
-	echo "	"
+	echo "   -v			 --version	Display version"
+	echo "   -? / -h		 --help		Show xmpl help page"
+	echo "  "
 
 }
 
 ##################################################################
 # MAIN SCRIPT
 
-version='1.0.3'
+version='1.0.4'
 
 oIFS=$IFS 	#Saving old IFS
 IFS=$'\n' 	#Delimiter to new line
@@ -1230,12 +1251,12 @@ XMPL_DEFAULT_REPO='main' #set default repo to main
 
 OPTIND=1 #setting option index to 1
 
-flags=":spcOixlXIhv?" #noinstal mode
+flags=":spcOixlXIhv-:?" #noinstal mode
 
 #if xmpl is installed
 if [ -f ${XMPL_HOME}/.xmpl/xmpl.conf ];then
 	source ${XMPL_HOME}/.xmpl/xmpl.conf #load conf
-	flags=":spcoOixlXIUDndrReSPhv?" 		#full mode
+	flags=":spcoOixlXIUDndrReSPhv-:?" 		#full mode
 fi
 #current repo = default repo
 XMPL_CURRENT_REPO=$XMPL_DEFAULT_REPO 
@@ -1264,6 +1285,41 @@ unset XMPL_INPUTS
 # Parse options to the `xmpl` command
 while getopts $flags flag; do
 
+	if [ ${flag} == "-" ];then
+		case ${OPTARG} in
+		"search" ) 		flag=s;;
+		"package" )		flag=p;;
+		"comments" ) 	flag=c;;
+		"online" ) 		flag=o;;
+		"full-online" )	flag=O;;
+		"input" ) 		flag=i;;
+		"execute" )		flag=x;;
+		"last" ) 		flag=l;;
+		"execute-last" )flag=X;;
+		"install" )		flag=I;;
+		"update" ) 		flag=U;;
+		"deinstall" ) 	flag=D;;
+		"new-repo" ) 	flag=n;;
+		"delete-repo" )	flag=d;;
+		"change-repo" )	flag=r;;
+		"save-repo" ) 	flag=R;;
+		"edit" ) 		flag=e;;
+		"sync-repo" ) 	flag=S;;
+		"pull-request" )flag=P;;
+		"help" ) 		flag=h;;
+		"version" )		flag=v;;
+		*)
+			#Invalid option
+			echo -e "\e[33mInvalid option: --$OPTARG\e[39m" >&2
+			echo "Use 'xmpl --help' or 'xmpl -?' for help" >&2
+			XMPL_MODE_NULL=1
+			if [ ! return >& /dev/null ];then
+				exit
+			fi
+		;;
+		esac
+	fi
+	
 	case ${flag} in
 	s )
 		#Search mode
@@ -1279,7 +1335,7 @@ while getopts $flags flag; do
 			done
 		fi
 	;;
-	p)
+	p )
 		#Package mode
 		package=""
 		#get package
