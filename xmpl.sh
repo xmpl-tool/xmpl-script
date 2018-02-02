@@ -453,7 +453,7 @@ function syncRepository {
 	XMPL_USERNAME=$(dirname $XMPL_REPO)
 	cd ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO
 	git add . >&2
-	git git remote update >&2
+	git remote update >&2
 	
 	if git diff @{upstream} --quiet --;then
 		status=$(curl --silent https://api.github.com/repos/xmpl-tool/xmpl-repo/compare/xmpl-tool:master...$XMPL_USERNAME:master --stderr - | jq -r '.status')
