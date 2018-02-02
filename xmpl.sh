@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# xmpl-tool v1.0.4
+# xmpl-tool v1.0.5
 # Author: Ivan Krpan
-# Date: 31.01.2018
+# Date: 02.02.2018
 
 ##################################################################
 # EXIT FUNCTIONS
@@ -453,6 +453,7 @@ function syncRepository {
 	XMPL_USERNAME=$(dirname $XMPL_REPO)
 	cd ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO
 	git add . >&2
+	git git remote update >&2
 	
 	if git diff @{upstream} --quiet --;then
 		status=$(curl --silent https://api.github.com/repos/xmpl-tool/xmpl-repo/compare/xmpl-tool:master...$XMPL_USERNAME:master --stderr - | jq -r '.status')
@@ -549,6 +550,7 @@ function pullRepository {
 	XMPL_REPO=$(grep -oP "$XMPL_CURRENT_REPO *= *\K.*" ${XMPL_HOME}/.xmpl/repo.conf)
 	XMPL_USERNAME=$(dirname $XMPL_REPO)
 
+	#TODO: Check if pull request exists
 	if grep upstream <(cd ~/.xmpl/repos/${XMPL_REPO}/ && git remote -v ) -q;then
 		#TODO: Get upstream repo from git remote and use it in GitHub api
 		status=$(curl --silent https://api.github.com/repos/xmpl-tool/xmpl-repo/compare/xmpl-tool:master...$XMPL_USERNAME:master --stderr - | jq -r '.status')
@@ -565,7 +567,7 @@ function pullRepository {
 				read -e prBody
 			done;
 			
-			while : ;do 
+			while : ;do
 				if curl --silent -u ${XMPL_USERNAME} https://api.github.com/repos/xmpl-tool/xmpl-repo/pulls -d "{ \"title\": \"$prTitle\", \"body\": \"$prBody\", \"head\": \"$XMPL_USERNAME:master\", \"base\": \"master\" }" -f 1>/dev/null;then
 					echo -e "\e[33mPull request successfull!\e[39m" >&2
 					break
@@ -700,11 +702,15 @@ function listAllPackages {
 				input=0 #Set input to 0	
 				while ! [ "$input" -le "$j" -a "$input" -gt 0 ] 2>/dev/null; do
 					#Reading user input
-					if ! input=$(test -z $fkey && xmplRead "Please select package number:" 1 1 $i || return 1);then
+					if ! input=$(test -z $fkey && xmplRead "Please select package:" 1 1 $i || return 1);then
 						return 1
 					fi	
+					#check if input is number
+					if ! [[ $input =~ "^[0-9]+$" ]] ; then
+						#if not find id by name
+					   	input=$(printf '%s\n' "${paths[@]}" | grep -nw $input | cut -f1 -d:)
+					fi
 				done
-
 				input=$((input-1)) # input = userinput - 1
 				#select package
 				selectMode ${names[$input]}
@@ -1222,7 +1228,7 @@ function showHelp {
 ##################################################################
 # MAIN SCRIPT
 
-version='1.0.4'
+version='1.0.5'
 
 oIFS=$IFS 	#Saving old IFS
 IFS=$'\n' 	#Delimiter to new line
