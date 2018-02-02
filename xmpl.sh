@@ -919,7 +919,7 @@ function xmplEditor {
 						
 						while ! [[ $response2 =~ ^(yes|y) ]] 2>/dev/null; do
 							input=0 #Set input to 0	
-							eho -e "Please enter description for package '$package':"
+							echo -e "Please enter description for package '$package':"
 							read -e input
 							echo -e "Is this description correct? [y/N]"
 							read response2
