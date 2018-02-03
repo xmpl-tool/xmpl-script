@@ -932,14 +932,11 @@ function executeMode {
 ##################################################################
 # EDITOR FUNCTIONS
 
-#TODO: create multiline editor function (-E)
-#edit example in default editor (vi/nano)
-
 #TODO: create function for deleteing examples
 
 function xmplEditor {
 
-	local input data tags title package newRepoAlias XMPL_USERNAME response response2 names paths urls outFile out line
+	local input data tags title package newRepoAlias XMPL_USERNAME response response2 names paths urls outFile out
 
 	package=$1
 	newRepoAlias=$2
@@ -1047,7 +1044,7 @@ function xmplEditor {
 			response2=NO
 				while [[ ! $response2 =~ ^(yes|y) ]]; do
 					echo -e "Enter command with input variable structure {:variable name:}" >&2
-					if [[ $(echo "$data" | wc -l) == "1" ]];then
+					if [[ $(echo "$data" | wc -l) == "1" ]] && [[ "$XMPL_MODE_EDIT" != "2" ]];then
 						read -e -i "$data" data
 					else
 						read -p "This will open multiline editor! OK?" >&2
@@ -1275,7 +1272,8 @@ function showHelp {
 		echo "   -r [repo_alias]	 --change-repo	Switch repository source"	  
 		echo "   -R [repo_alias]	 --save-repo	Switch and store repository source"
 		echo "   "
-		echo "   -e [package]		 --edit		Edit package in private repository"
+		echo "   -e [package]		 --edit		Edit examples in private repository"
+		echo "   -E [package]		 --editor	Edit multiline examples in private repository"
 		echo "   "
 		echo "   -S [repo_alias]	 --sync-repo	Synchronize local and remote repository"
 		echo "   -P [repo_alias]	 --pull-request	Send changes to xmpl main repository"
@@ -1325,7 +1323,7 @@ flags=":spcCOixlXIhv-:?" #noinstal mode
 #if xmpl is installed
 if [ -f ${XMPL_HOME}/.xmpl/xmpl.conf ];then
 	source ${XMPL_HOME}/.xmpl/xmpl.conf #load conf
-	flags=":spcCoOixlXIUDndrReSPhv-:?" 		#full mode
+	flags=":spcCoOixlXIUDndrReESPhv-:?" 		#full mode
 fi
 #current repo = default repo
 XMPL_CURRENT_REPO=$XMPL_DEFAULT_REPO 
@@ -1592,6 +1590,22 @@ while getopts $flags flag; do
 			exit
 		fi
 	;;
+	E )
+		#multiline edit mode
+		package=""
+		#get package
+		until [[ $(eval "echo \${$OPTIND}") =~ ^-.* ]] || [[ -z $(eval "echo \${$OPTIND}") ]]; do
+				package=$(eval "echo \${$OPTIND}")
+				shift
+		done
+		XMPL_PACKAGE=$package
+
+		XMPL_MODE_QUERY=0
+		XMPL_MODE_EDIT=2
+		if [ ! return >& /dev/null ];then
+			exit
+		fi
+	;;
 	S )
 		#sync repo
 		repo=$(eval "echo \${$OPTIND}")
@@ -1677,7 +1691,7 @@ if [ $XMPL_MODE_NULL != 1 -a $XMPL_MODE_QUERY == 1 ];then
 
 fi
 #if edit mode
-if [ $XMPL_MODE_NULL != 1 -a $XMPL_MODE_EDIT == 1 ];then
+if [ $XMPL_MODE_NULL != 1 -a $XMPL_MODE_EDIT -ge 1 ];then
 	if [[ $XMPL_PACKAGE == "." ]];then
 		XMPL_PACKAGE=""
 	fi
