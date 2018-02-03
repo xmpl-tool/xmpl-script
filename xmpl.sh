@@ -2,7 +2,7 @@
 
 # xmpl-tool v1.0.5
 # Author: Ivan Krpan
-# Date: 02.02.2018
+# Date: 03.02.2018
 
 ##################################################################
 # EXIT FUNCTIONS
@@ -825,23 +825,61 @@ function executeMode {
 					do
 						if [[ ${arg} != '' ]]; then #If argument exists 
 								if [[ ! -z ${XMPL_INPUTS[$a]} ]] ;then
-	
+									#use existing user inputs
 									parm=${XMPL_INPUTS[$a]}
+									#Review the existing user input arguments
+									echo -e "\e[36m$arg:\e[39m" | sed -e 's/{://' -e 's/:}//' >&2 
+									
+									if [[ ! ${parm: -1} == " " ]]; then
+											echo -e $parm >&2
+										else
+											if [[ ! "$parm" =~ "'" ]]; then
+												echo -e "'$parm'" >&2
+											else
+												if [[ ! "$parm" =~ "\"" ]]; then
+													echo -e "\"$parm\"" >&2
+												else
+													echo -e "$parm" >&2
+												fi
+											fi
+										fi		
+									
 								else
-									trap 'return' INT
+									trap 'return' INT #return to ctrl+c for exiting read function
 									echo -e "\e[36m$arg:\e[39m" | sed -e 's/{://' -e 's/:}//' >&2 #Asking user to input argument
 									if [ "$XMPL_LAST_URL" == "$eurl" ];then
-										read -e -i "${old_inputs[$a]}" parm #read input with last input suggestion
+										if [[ ! ${old_inputs[$a]: -1} == " " ]]; then
+											read -e -i "${old_inputs[$a]}" parm #read input with last input suggestion
+										else
+											if [[ ! "$old_inputs[$a]" =~ "'" ]]; then
+												read -e -i "'${old_inputs[$a]}'" parm #read input with last input suggestion
+											else
+												if [[ ! "$old_inputs[$a]" =~ "\"" ]]; then
+													read -e -i "\"${old_inputs[$a]}\"" parm #read input with last input suggestion
+												else
+													read -e -i "${old_inputs[$a]}" parm #read input with last input suggestion
+												fi
+											fi
+										fi
 									else
 										read -e parm #read new input
 									fi
 									trap - INT
-
-									XMPL_INPUTS+=($parm)
+									parm=$(echo "${parm%% }") #remove last whitespace from user input (because autocomplete end with whitespace)
+									if [ ${parm:0:1} == "\"" ] && [ ${parm: -1} == "\"" ];then #if value is commented with double quote
+										#remove double quote
+										parm=$(echo "${parm//\"/}")
+										parm=$(echo "${parm%%\"}")
+									elif [ ${parm:0:1} == "'" ] && [ ${parm: -1} == "'" ];then #if value is commented with single quote
+										#remove single quote
+										parm=$(echo "${parm//\'/}")
+										parm=$(echo "${parm%%\'}")
+									fi
+									XMPL_INPUTS+=(${parm})
 								fi
 
 								#parms ecape chars 3x
-								parm=$(echo "${parm%% }" | sed -e 's/\\/\\\\/g; s/ /\\ /g;' | sed -e 's/\\/\\\\\\\\/g; s/&/\\\\\\&/g;' )
+								parm=$(echo "${parm}" | sed -e 's/\\/\\\\/g; s/ /\\ /g;' | sed -e 's/\\/\\\\\\\\/g; s/&/\\\\\\&/g;' )
 
 								XMPL_RESULT=$(echo $XMPL_RESULT | sed -e 's,'"$arg"','"$parm"',') #Putting argument in command
 
@@ -887,6 +925,12 @@ function executeMode {
 }
 ##################################################################
 # EDITOR FUNCTIONS
+
+#TODO: create multiline editor function (-E)
+#edit example in default editor (vi/nano)
+
+#TODO: create function for deleteing examples
+
 function xmplEditor {
 
 	local input data tags title package newRepoAlias XMPL_USERNAME response response2 names paths urls outFile
@@ -941,7 +985,7 @@ function xmplEditor {
 					fi
 
 			fi
-
+			#TODO: sort examples
 			names+=($(find ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package -type f -name "*.xmpl" -exec  basename -s ".xmpl" {} \;))
 			paths+=($(find ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package -type f -name "*.xmpl" -exec sh -c "dirname {} | sed 's/.*\///'" \;))
 			urls+=($(find ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package -type f -name "*.xmpl"))
@@ -992,7 +1036,9 @@ function xmplEditor {
 				
 			fi
 			echo -e "\e[33mEdit example '${title}'\e[39m" >&2
-				
+			
+			#TODO: enable examples renaming
+			
 			while : ;do
 			response2=NO
 				while [[ ! $response2 =~ ^(yes|y) ]]; do
