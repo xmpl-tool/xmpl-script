@@ -939,7 +939,7 @@ function executeMode {
 
 function xmplEditor {
 
-	local input data tags title package newRepoAlias XMPL_USERNAME response response2 names paths urls outFile
+	local input data tags title package newRepoAlias XMPL_USERNAME response response2 names paths urls outFile out line
 
 	package=$1
 	newRepoAlias=$2
@@ -991,10 +991,11 @@ function xmplEditor {
 					fi
 
 			fi
-			#TODO: sort examples
-			names+=($(find ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package -type f -name "*.xmpl" -exec  basename -s ".xmpl" {} \;))
-			paths+=($(find ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package -type f -name "*.xmpl" -exec sh -c "dirname {} | sed 's/.*\///'" \;))
-			urls+=($(find ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package -type f -name "*.xmpl"))
+			#get and sort examples
+			out=$(intersectionGrep "$package" "$query" "xmpl" "${XMPL_HOME}/.xmpl/repos/$XMPL_REPO" | sort) #get local results
+			names+=($(echo "$out" | sed -e 's/.*\///' -e 's/.xmpl//')) #Parse names in array
+			paths+=($(dirname $out 2>/dev/null | sed 's/.*\///')) #Parse paths in array
+			urls+=($(echo "$out" )) #Parse urls in array
 					
 			if [ "${#names[@]}" -ge 1 ]; then #For 1 or more example result
 			
@@ -1019,45 +1020,51 @@ function xmplEditor {
 				i=0 #Counter to 0
 				input=-1 #Input to -1
 			fi
-			#echo $input
 			
 			if [ $input -ge 0 ];then #if input >= 0
 				title=${names[$input]}
 				data=$(cat ${urls[$input]} | sed '/^[[:blank:]]*#/d;s/#.*//') #Get raw data and remove commnets
-				tags=$(cat ${urls[$input]} | sed 's/#//;2q;d')
-			else		
-
-				while [ -z ${title} ];do
+				tags=$(cat ${urls[$input]} | sed 's/#//;2q;d')	
+			fi	
+				while : ;do
 				response2=NO
 				
 					while [[ ! $response2 =~ ^(yes|y) ]]; do
 						echo -e "Enter example title:" >&2
-						read -e -i "$title" title 
+						read -e -i "$title" title
 						echo -e "Is this title correct? [y/N]" >&2
 						read response2
 
 						response2=${response2,,} # tolower
 					done
+					[ ! -z ${title} ] && break
 				done
 				
-			fi
 			echo -e "\e[33mEdit example '${title}'\e[39m" >&2
-			
-			#TODO: enable examples renaming
+			outFile=${title//[\/]/ } #remove slash from filenames
 			
 			while : ;do
 			response2=NO
 				while [[ ! $response2 =~ ^(yes|y) ]]; do
 					echo -e "Enter command with input variable structure {:variable name:}" >&2
-					read -e -i "$data" data				
+					if [[ $(echo "$data" | wc -l) == "1" ]];then
+						read -e -i "$data" data
+					else
+						read -p "This will open multiline editor! OK?" >&2
+						echo "$data" >  ${XMPL_HOME}/.xmpl/edit.tmp
+						editor ${XMPL_HOME}/.xmpl/edit.tmp
+						cat ${XMPL_HOME}/.xmpl/edit.tmp >&2
+						data=$(cat ${XMPL_HOME}/.xmpl/edit.tmp)
+						rm ${XMPL_HOME}/.xmpl/edit.tmp
+					fi
 					echo -e "Is this command correct? [y/N]" >&2
 					read response2
 
 					response2=${response2,,} # tolower
 				done
-				[ -z ${data} ] || break
+				[[ -z "${data}" ]] || break
 			done
-
+			
 			while : ;do
 			response2=NO
 				while [[ ! $response2 =~ ^(yes|y) ]] 2>/dev/null; do
@@ -1072,7 +1079,10 @@ function xmplEditor {
 				[ -z ${tags} ] || break
 			done				
 			
-			outFile=${title//[\/]/ }
+			if [ $input -ge 0 ];then
+				rm "${urls[$input]}"
+			fi
+			
 			echo "#${title,,}" > ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package/${outFile}.xmpl
 			echo "#${tags,,}" >> ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package/${outFile}.xmpl			
 			echo "${data}" >> ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package/${outFile}.xmpl
