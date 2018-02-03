@@ -15,7 +15,7 @@ function byebye {
 	unset -f uninstallSourced
 	
 	unset i repo package status git_repo XMPL_OUTPUT OPTARG OPTIND flag inputs old_inputs query flags XMPL_REPO oIFS XMPL_PACKAGE XMPL_QUERY XMPL_LAST_REPO_UPDATE XMPL_DEFAULT_REPO
-	unset XMPL_USER XMPL_HOME XMPL_MODE_QUERY XMPL_MODE_EDIT XMPL_MODE_RAW XMPL_MODE_INPUT XMPL_MODE_EXECUTE XMPL_MODE_ONLINE XMPL_MODE_HISTORY XMPL_MODE_NULL fkey version
+	unset XMPL_PRE_RESULT XMPL_USER XMPL_HOME XMPL_MODE_QUERY XMPL_MODE_EDIT XMPL_MODE_RAW XMPL_MODE_INPUT XMPL_MODE_EXECUTE XMPL_MODE_ONLINE XMPL_MODE_HISTORY XMPL_MODE_NULL fkey version
 	
 	trap - INT
 	echo -e "\e[39m\c" >&2
@@ -780,7 +780,7 @@ function selectMode {
 
 function executeMode {
 
-	local raw data arg parm arguments a ename epath eurl
+	local raw arg parm arguments a ename epath eurl
 	
 	ename=$1
 	epath=$2
@@ -799,24 +799,27 @@ function executeMode {
 				if [ $XMPL_MODE_ONLINE -ge 1 ];then
 					raw=$(echo -e $eurl | sed -e 's/https:\/\/github.com/https:\/\/raw.githubusercontent.com/; s/\/blob\//\//;') #Replacing html url with raw url
 					
-						data=$(curl --silent $raw --stderr - ) #Get example raw data 
+						XMPL_PRE_RESULT=$(curl --silent $raw --stderr - ) #Get example raw result 
 
 				else
 					raw=$eurl
-					data=$(cat $raw)
+					XMPL_PRE_RESULT=$(cat $raw)
 				fi
-
-				if [[ $XMPL_MODE_RAW != 1 ]];then
-					data=$(echo "$data" | sed '/^[[:blank:]]*#/d;s/#.*//' ) #Get example raw data and remove comments
-				fi				
+							
+				XMPL_RESULT=$(echo "$XMPL_PRE_RESULT" | sed '/^[[:blank:]]*#/d;s/#.*//' ) #Get example raw result and remove comments				
 				
-				XMPL_RESULT=$data
+				if [[ $XMPL_MODE_RAW == 0 ]] ;then
+					XMPL_PRE_RESULT=$(echo "$XMPL_PRE_RESULT" | sed '/^[[:blank:]]*#/d;s/#.*//' ) #Get example raw result and remove comments
+				elif [[ $XMPL_MODE_RAW == 1 ]];then
+					XMPL_PRE_RESULT=$(echo "$XMPL_PRE_RESULT" | awk 'NR>2') #Get example raw result and remove comments
+				fi	
+				
 				if [[ $XMPL_MODE_INPUT == 1 ]]; then #User puts arguments
-					arguments=$(echo $data | grep -Po '{:[^:]*:}') #Get all arguments from example
+					arguments=$(echo $XMPL_PRE_RESULT | grep -Po '{:[^:]*:}') #Get all arguments from example
 					
 					if [[ ${arguments} != '' ]];then #If arguments exists
 						echo -e "\e[93m\c" >&2 #Color yellow
-						echo "$data" >&2 #Output command input preview to stderr
+						echo "$XMPL_PRE_RESULT" >&2 #Output command input preview to stderr
 						echo -e "\e[39m\c" >&2 #Color default
 					fi
 					a=0
@@ -881,19 +884,20 @@ function executeMode {
 								#parms ecape chars 3x
 								parm=$(echo "${parm}" | sed -e 's/\\/\\\\/g; s/ /\\ /g;' | sed -e 's/\\/\\\\\\\\/g; s/&/\\\\\\&/g;' )
 
-								XMPL_RESULT=$(echo $XMPL_RESULT | sed -e 's,'"$arg"','"$parm"',') #Putting argument in command
-
+								XMPL_RESULT=$(echo "$XMPL_RESULT" | sed -e 's,'"$arg"','"$parm"',') #Putting argument in command
+								XMPL_PRE_RESULT=$(echo "$XMPL_PRE_RESULT" | sed -e 's,'"$arg"','"$parm"',') #Putting argument in command
 							a=$((a+1))
 						fi
 					done
 					#prepare result for execution
-					XMPL_RESULT=$(echo "$XMPL_RESULT" | sed -e "s/'/\\\'/g;" | sed -e 's/"/\\\"/g; s/&/\\\\&/g;')
+					XMPL_RESULT=$(echo "$XMPL_RESULT" | sed -e "s/'/\\'/g;" | sed -e 's/"/\\"/g; s/&/\\\&/g;')
 					echo -e "\e[92m\c" >&2 #Color green
-					
+					XMPL_PRE_RESULT=$(echo "$XMPL_PRE_RESULT" | sed -e 's/\$/\\$/g;')
+					XMPL_RESULT=$(echo "$XMPL_RESULT" | sed -e 's/\$/\\$/g;')
 					if [[ $XMPL_MODE_INPUT == 1 ]] && [[ $XMPL_MODE_EXECUTE == 0 ]]; then #If input mode
-						echo $(eval echo "$XMPL_RESULT") #Print evaled result to stdout
+						printf '%s\n' $(eval "echo \"$XMPL_PRE_RESULT\"") #Print evaled result to stdout
 					else #if execute mode
-						echo $(eval echo "$XMPL_RESULT") >&2 #Print evaled result to stderr
+						printf '%s\n' $(eval "echo \"$XMPL_RESULT\"") >&2 #Print evaled result to stderr
 					fi
 					
 					echo -e "\e[39m\c" >&2 #Color default
@@ -901,10 +905,12 @@ function executeMode {
 					if [[ $XMPL_MODE_EXECUTE == 1 ]]; then
 
 						#eval echo to convert ~ to path
-						XMPL_RESULT=$(eval echo "$XMPL_RESULT" | sed '/^[[:blank:]]*#/d;s/#.*//') #Remove comments and execute pre-evaled command
+						XMPL_RESULT=$(eval "echo \"$XMPL_RESULT\"" | sed '/^[[:blank:]]*#/d;s/#.*//') #Remove comments and execute pre-evaled command
 						
 						echo 2>/dev/null "$XMPL_RESULT" 1>&3 #Print results to stdout2 only
+						trap 'return' INT
 						eval "$XMPL_RESULT"
+						trap - INT
 						if [ $? -eq 0 ]; then
 							echo -e "\e[35mEXECUTED\e[39m" >&2 #Command executed
 						else
@@ -914,7 +920,7 @@ function executeMode {
 					
 				else
 					echo -e "\e[92m\c" >&2 #Color green
-					echo "$XMPL_RESULT" #Print results to stdout
+					echo "$XMPL_PRE_RESULT" #Print results to stdout
 					echo -e "\e[39m\c" >&2 #Color default
 				fi
 			
@@ -1213,8 +1219,8 @@ function showHelp {
 		echo -e "	[--new-repo] \e[1mgithub_user/repo\e[0m"
 		echo -e "	[--delete-repo] [--change-repo] [--save-repo]"
 		echo -e "	[--sync-repo] [--pull-request] \e[1mrepo_alias\e[0m"
-		echo -e "	[--comments] [--online] [--full-online] [--last] [--install]"
-		echo -e "	[--update] [--deinstall] [--version] [--help]"
+		echo -e "	[--comments] [--raw] [--online] [--full-online] [--last]"
+		echo -e "	[--install] [--update] [--deinstall] [--version] [--help]"
 	else
 		echo "No-install usage:"
 		echo "	"
@@ -1223,7 +1229,7 @@ function showHelp {
 		echo -e "	[--search] \e[1mfilter_1 filter_2\e[0m"
 		echo -e "	[--package] \e[1mpackage\e[0m"
 		echo -e "	[--input] [--execute] [--execute-last] \e[1margument_1 argument_2\e[0m"
-		echo -e "	[--comments] [--full-online] [--last] [--install] [--version] [--help]"
+		echo -e "	[--comments] [--raw] [--full-online] [--last] [--install] [--version] [--help]"
 	fi	  
 	echo ""
 	echo ""
@@ -1235,6 +1241,7 @@ function showHelp {
 	echo "   -p [package]		 --package	Filter by package"		  
 	echo "  "	  
 	echo "   -c			 --comments	Display comments in examples"
+	echo "   -C			 --raw		Display raw example"
 	echo "  "	  	
 	if [ -f ${XMPL_HOME}/.xmpl/repo.conf ];then
 		echo "   -o 			 --online	Force online mode"
@@ -1303,12 +1310,12 @@ XMPL_DEFAULT_REPO='main' #set default repo to main
 
 OPTIND=1 #setting option index to 1
 
-flags=":spcOixlXIhv-:?" #noinstal mode
+flags=":spcCOixlXIhv-:?" #noinstal mode
 
 #if xmpl is installed
 if [ -f ${XMPL_HOME}/.xmpl/xmpl.conf ];then
 	source ${XMPL_HOME}/.xmpl/xmpl.conf #load conf
-	flags=":spcoOixlXIUDndrReSPhv-:?" 		#full mode
+	flags=":spcCoOixlXIUDndrReSPhv-:?" 		#full mode
 fi
 #current repo = default repo
 XMPL_CURRENT_REPO=$XMPL_DEFAULT_REPO 
@@ -1337,11 +1344,12 @@ unset XMPL_INPUTS
 # Parse options to the `xmpl` command
 while getopts $flags flag; do
 
-	if [ ${flag} == "-" ];then
+	if [[ "${flag}" == "-" ]];then
 		case ${OPTARG} in
 		"search" ) 		flag=s;;
 		"package" )		flag=p;;
 		"comments" ) 	flag=c;;
+		"raw" )			flag=C;;
 		"online" ) 		flag=o;;
 		"full-online" )	flag=O;;
 		"input" ) 		flag=i;;
@@ -1404,6 +1412,10 @@ while getopts $flags flag; do
 	c )
 		#comments on
 		XMPL_MODE_RAW=1
+	;;
+	C )
+		#raw file on
+		XMPL_MODE_RAW=2
 	;;
 	o )
 		#force online mode
@@ -1609,7 +1621,7 @@ while getopts $flags flag; do
 	;;
 	\? )
 		#other options
-		if [ "$OPTARG" == "?" ];then
+		if [ "$OPTARG" == \? ];then
 			#Show help
 			XMPL_OUTPUT="$(showHelp)"
 			XMPL_MODE_NULL=1
