@@ -386,7 +386,7 @@ function forkRepository {
 								break
 							fi
 							if [ $i -eq 3 ];then
-								echo -e "\e[31mFailed!\n\e[33mPlease try again\e[39m" >&2
+								echo -e "\e[31mFailed!\n\e[33mPlease try again!\e[39m" >&2
 								return 1
 							fi
 						
@@ -706,9 +706,9 @@ function listAllPackages {
 						return 1
 					fi	
 					#check if input is number
-					if ! [[ $input =~ "^[0-9]+$" ]] ; then
+					if ! [ "$input" -eq "$input" ] 2>/dev/null; then
 						#if not find id by name
-					   	input=$(printf '%s\n' "${paths[@]}" | grep -nw $input | cut -f1 -d:)
+					   	input=($(printf '%s\n' "${paths[@]}" | grep -nw $input | cut -f1 -d:))
 					fi
 				done
 				input=$((input-1)) # input = userinput - 1
