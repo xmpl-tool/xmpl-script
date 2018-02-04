@@ -22,7 +22,7 @@ sudo bash xmpl.sh -I
         [--new-repo] github_user/repo
         [--remove-repo] [--change-repo] [--save-repo] [--sync-repo] [--pull-request] repo_alias
         [--comments] [--raw] [--online] [--full-online] [--last] 
-		[--install] [--update] [--deinstall] [--version] [--help]
+	[--install] [--update] [--deinstall] [--version] [--help]
 
 
  xmpl                                                      List available packages
@@ -33,7 +33,7 @@ sudo bash xmpl.sh -I
        -p [package]                 --package              Filter by package
 
        -c                           --comments             Display comments in examples
-	   -C						    --raw				   Display raw example
+       -C			    --raw		   Display raw example
 
        -o                           --online               Force online mode
        -O                           --full-online          Force online mode with descriptions
@@ -55,8 +55,8 @@ sudo bash xmpl.sh -I
        -R [repo_alias]              --save-repo            Switch and store repository source
 
        -e [package]                 --edit                 Edit package in private repository
-	   -E [package]				    --editor			   Edit multiline examples in private repository
-	   -d [package]				    --delete			   Delete example or package in private repository
+       -E [package]		    --editor		   Edit multiline examples in private repository
+       -d [package]		    --delete		   Delete example or package in private repository
 
        -S [repo_alias]              --sync-repo            Synchronize local and remote repository
        -P [repo_alias]              --pull-request         Send changes to xmpl main repository
