@@ -321,7 +321,7 @@ function addNewRepository {
 		done
 		
 		if [ -f ${XMPL_HOME}/.xmpl/repos/$user/$repoName/commands.repo ];then
-			echo -e "Repository already exist! Overwrite local repository? [y/N]" >&2
+			echo -e "Repository already exists! Overwrite local repository? [y/N]" >&2
 			read response
 	
 		else
@@ -541,7 +541,7 @@ function syncRepository {
 
 function pullRepository {
 
-	local prTitle prBody XMPL_USERNAME response
+	local prTitle prBody XMPL_USERNAME response upstream upstream_user
 	
 	if ! getRepository $1;then
 		return 1
@@ -549,11 +549,20 @@ function pullRepository {
 
 	XMPL_REPO=$(grep -oP "$XMPL_CURRENT_REPO *= *\K.*" ${XMPL_HOME}/.xmpl/repo.conf)
 	XMPL_USERNAME=$(dirname $XMPL_REPO)
-
-	#TODO: Check if pull request exists
+	
 	if grep upstream <(cd ~/.xmpl/repos/${XMPL_REPO}/ && git remote -v ) -q;then
-		#TODO: Get upstream repo from git remote and use it in GitHub api
-		status=$(curl --silent https://api.github.com/repos/xmpl-tool/xmpl-repo/compare/xmpl-tool:master...$XMPL_USERNAME:master --stderr - | jq -r '.status')
+
+		#Get upstream repo
+		upstream=$(cd ~/.xmpl/repos/${XMPL_REPO}/ && git remote -v | grep upstream | grep fetch | awk '{print $2}' | awk -F / '{ print $4 "/" substr($5,1,length($5)-4)}')
+		upstream_user=$(dirname $upstream)
+		
+		#Check if pull request exists
+		if [[ $(curl --silent https://api.github.com/repos/$upstream/pulls --stderr - | jq -r .[].user.login | grep '^'$XMPL_USERNAME'$') == "$XMPL_USERNAME" ]];then
+			echo "Pull request already exists!" >&2
+			return 1
+		fi
+		
+		status=$(curl --silent https://api.github.com/repos/$upstream/compare/$upstream_user:master...$XMPL_USERNAME:master --stderr - | jq -r '.status')
 		
 		if [ "$status" != "identical" ];then
 		
@@ -564,7 +573,7 @@ function pullRepository {
 			
 			while [ -z $prBody ] ;do
 				echo -e "Enter pull request body:" >&2
-				read -e prBody
+				read -e -i $prTitle prBody
 			done;
 			
 			while : ;do
@@ -957,7 +966,7 @@ function deleteExample {
 		read -e package
 	done
 	if ! [ -f ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package/$package.desc >& /dev/null ] ;then
-		echo "Package '$package' does not exist!" >&2
+		echo "Package '$package' does not exists!" >&2
 	else
 		#get and sort examples
 			out=$(intersectionGrep "$package" "$query" "xmpl" "${XMPL_HOME}/.xmpl/repos/$XMPL_REPO" | sort) #get local results
@@ -1606,11 +1615,11 @@ while getopts $flags flag; do
 			git_repo='xmpl-tool/xmpl-repo'
 			status='OK'
 		fi
-		#if repository exist
+		#if repository exists
 		if [ ${status} != "null" ]; then
 			addNewRepository "" "" $git_repo
 		else
-			echo -e "\e[33mGitHub repository does not exist!\e[39m" >&2
+			echo -e "\e[33mGitHub repository does not exists!\e[39m" >&2
 		fi
 		byebye #?
 		if ! return >& /dev/null; then
