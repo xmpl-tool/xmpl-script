@@ -2,7 +2,7 @@
 
 # xmpl-tool v1.0.5
 # Author: Ivan Krpan
-# Date: 03.02.2018
+# Date: 04.02.2018
 
 ##################################################################
 # EXIT FUNCTIONS
@@ -932,7 +932,86 @@ function executeMode {
 ##################################################################
 # EDITOR FUNCTIONS
 
-#TODO: create function for deleteing examples
+function deleteExample {
+
+	local input package newRepoAlias XMPL_USERNAME response names paths urls out
+		
+	package=$1
+	newRepoAlias=$2
+
+	if ! getRepository $newRepoAlias;then
+		return
+	fi
+
+	XMPL_REPO=$(grep -oP "$XMPL_CURRENT_REPO *= *\K.*" ${XMPL_HOME}/.xmpl/repo.conf)
+	XMPL_USERNAME=$(dirname $XMPL_REPO)
+
+	if [[ "$XMPL_USERNAME" == "xmpl-tool" ]];then
+		echo -e "\e[33mNot possible to edit xmpl main repository directly!" >&2
+		echo -e "Please use private repository!\e[39m" >&2
+		return 1
+	fi
+
+	while [ -z ${package} ];do
+		echo -e "Enter package name:" >&2
+		read -e package
+	done
+	if ! [ -f ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package/$package.desc >& /dev/null ] ;then
+		echo "Package '$package' does not exist!" >&2
+	else
+		#get and sort examples
+			out=$(intersectionGrep "$package" "$query" "xmpl" "${XMPL_HOME}/.xmpl/repos/$XMPL_REPO" | sort) #get local results
+			names+=($(echo "$out" | sed -e 's/.*\///' -e 's/.xmpl//')) #Parse names in array
+			paths+=($(dirname $out 2>/dev/null | sed 's/.*\///')) #Parse paths in array
+			urls+=($(echo "$out" )) #Parse urls in array
+					
+			if [ "${#names[@]}" -ge 1 ]; then #For 1 or more example result
+				i=0	#Set counter to 0
+					for n in ${names[@]}; do #For each example
+						i=$((i+1)) #Counter +1
+						echo -e "\e[96m$i \e[32m$n\e[39m" >&2 #Print title to selection list
+					done
+					input=-1 #Set input to -1
+					while ! [ "$input" -le "$i" -a "$input" -ge 0 ] 2>/dev/null; do
+						#Asking user to select example
+						if ! input="$(xmplRead 'Please select example number:' '' 1 $i)";then
+							return 1
+						fi
+					done
+					
+					input=$((input-1)) #Real input = User input - 1
+					echo -e "\e[32m\c" >&2 #Color green
+					cat ${urls[$input]}
+					echo -e "\e[39m\c" >&2 #Color default
+					echo "Delete example '${names[$input]}'? [y/N]" >&2
+					read response
+
+					response=${response,,} # tolower
+						if [[ $response =~ ^(yes|y) ]]; then
+							rm -rf ${urls[$input]}
+							echo "Example '${names[$input]}' successfully deleted!" >&2
+						else
+							echo "Nothing changed!" >&2
+							return 0
+						fi
+					
+			else
+				echo -e "No examples for package '$package'!\nDelete this package? [y/N]" >&2
+				read response
+
+				response=${response,,} # tolower
+					if [[ $response =~ ^(yes|y) ]]; then
+						rm -rf ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package/
+						echo "Package '${package}' successfully deleted!" >&2
+					else
+						echo "Nothing changed!" >&2
+						return 0
+					fi
+			fi
+	fi
+	
+}
+
 
 function xmplEditor {
 
@@ -1267,13 +1346,14 @@ function showHelp {
 		echo "   -D			 --deinstall	Deinstall from local system"
 		echo "   "
 		echo "   -n [github_user/repo] --new-repo	Add new private repository"	  
-		echo "   -d [repo_alias]	 --delete-repo	Delete local repository"	  
+		echo "   -m [repo_alias]	 --remove-repo	Delete local repository"	  
 		echo "   "
 		echo "   -r [repo_alias]	 --change-repo	Switch repository source"	  
 		echo "   -R [repo_alias]	 --save-repo	Switch and store repository source"
 		echo "   "
 		echo "   -e [package]		 --edit		Edit examples in private repository"
 		echo "   -E [package]		 --editor	Edit multiline examples in private repository"
+		echo "   -d [package]		 --delete	Delete example or package in private repository"
 		echo "   "
 		echo "   -S [repo_alias]	 --sync-repo	Synchronize local and remote repository"
 		echo "   -P [repo_alias]	 --pull-request	Send changes to xmpl main repository"
@@ -1323,7 +1403,7 @@ flags=":spcCOixlXIhv-:?" #noinstal mode
 #if xmpl is installed
 if [ -f ${XMPL_HOME}/.xmpl/xmpl.conf ];then
 	source ${XMPL_HOME}/.xmpl/xmpl.conf #load conf
-	flags=":spcCoOixlXIUDndrReESPhv-:?" 		#full mode
+	flags=":spcCoOixlXIUDnmrReEdSPhv-:?" 		#full mode
 fi
 #current repo = default repo
 XMPL_CURRENT_REPO=$XMPL_DEFAULT_REPO 
@@ -1368,10 +1448,12 @@ while getopts $flags flag; do
 		"update" ) 		flag=U;;
 		"deinstall" ) 	flag=D;;
 		"new-repo" ) 	flag=n;;
-		"delete-repo" )	flag=d;;
+		"remove-repo" )	flag=m;;
 		"change-repo" )	flag=r;;
 		"save-repo" ) 	flag=R;;
 		"edit" ) 		flag=e;;
+		"editor" ) 		flag=E;;
+		"delete" ) 		flag=d;;
 		"sync-repo" ) 	flag=S;;
 		"pull-request" )flag=P;;
 		"help" ) 		flag=h;;
@@ -1535,8 +1617,8 @@ while getopts $flags flag; do
 			exit
 		fi
 	;;
-	d )
-		#delete repo
+	m )
+		#remove repo
 		unset repo
 		#get repo alias
 		until [[ $(eval "echo \${$OPTIND}") =~ ^-.* ]] || [[ -z $(eval "echo \${$OPTIND}") ]];do
@@ -1602,6 +1684,22 @@ while getopts $flags flag; do
 
 		XMPL_MODE_QUERY=0
 		XMPL_MODE_EDIT=2
+		if [ ! return >& /dev/null ];then
+			exit
+		fi
+	;;
+	d )
+		#delete example
+		package=""
+		#get package
+		until [[ $(eval "echo \${$OPTIND}") =~ ^-.* ]] || [[ -z $(eval "echo \${$OPTIND}") ]]; do
+				package=$(eval "echo \${$OPTIND}")
+				shift
+		done
+		XMPL_PACKAGE=$package
+
+		XMPL_MODE_QUERY=0
+		XMPL_MODE_EDIT=3
 		if [ ! return >& /dev/null ];then
 			exit
 		fi
@@ -1696,7 +1794,11 @@ if [ $XMPL_MODE_NULL != 1 -a $XMPL_MODE_EDIT -ge 1 ];then
 		XMPL_PACKAGE=""
 	fi
 	#edit package
-	xmplEditor "$XMPL_PACKAGE" "$XMPL_CURRENT_REPO"
+	if [ "$XMPL_MODE_EDIT" == "3" ];then
+		deleteExample "$XMPL_PACKAGE" "$XMPL_CURRENT_REPO"
+	else
+		xmplEditor "$XMPL_PACKAGE" "$XMPL_CURRENT_REPO"
+	fi
 fi
 #if mode history
 if [ $XMPL_MODE_HISTORY == 1 ];then
