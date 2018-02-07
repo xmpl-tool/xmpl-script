@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# xmpl-tool v1.0.5
+# xmpl-tool v1.0.6
 # Author: Ivan Krpan
-# Date: 04.02.2018
+# Date: 07.02.2018
 
 ##################################################################
 # EXIT FUNCTIONS
@@ -331,8 +331,8 @@ function addNewRepository {
 			if [[ $response =~ ^(yes|y) ]]; then
 				if forkRepository $user $toFork;then
 					if [[ "$XMPL_USER" != "$(whoami)" ]];then
-						su $XMPL_USER -c "rm -rf ${XMPL_HOME}/.xmpl/repos/$user"
-						su $XMPL_USER -c "mkdir -p ${XMPL_HOME}/.xmpl/repos/$user"
+						su $XMPL_USER -c "rm -rf ${XMPL_HOME}/.xmpl/repos/$user/$repoName"
+						su $XMPL_USER -c "mkdir -p ${XMPL_HOME}/.xmpl/repos/$user/$repoName"
 						su $XMPL_USER -c "git clone https://github.com/$user/$repoName ${XMPL_HOME}/.xmpl/repos/$user/$repoName"
 						if [ $toFork == 'xmpl-tool/xmpl-repo' ];then
 							su $XMPL_USER -c "cd ${XMPL_HOME}/.xmpl/repos/$user/$repoName >&2; git remote add upstream https://github.com/xmpl-tool/xmpl-repo.git >&2;"
@@ -341,15 +341,15 @@ function addNewRepository {
 						su $XMPL_USER -c "touch ${XMPL_HOME}/.xmpl/repo.conf"
 						su $XMPL_USER -c "editConfig $repoAlias '$user/$repoName' ${XMPL_HOME}/.xmpl/repo.conf"
 					else
-						rm -rf ${XMPL_HOME}/.xmpl/repos/$user
-						mkdir -p ${XMPL_HOME}/.xmpl/repos/$user
+						rm -rf ${XMPL_HOME}/.xmpl/repos/$user/$repoName
+						mkdir -p ${XMPL_HOME}/.xmpl/repos/$user/$repoName
 						git clone https://github.com/$user/$repoName ${XMPL_HOME}/.xmpl/repos/$user/$repoName
 						if [ $toFork == 'xmpl-tool/xmpl-repo' ];then
 							$(cd ${XMPL_HOME}/.xmpl/repos/$user/$repoName >&2; git remote add upstream https://github.com/xmpl-tool/xmpl-repo.git >&2;)
 						fi
 						
 						touch ${XMPL_HOME}/.xmpl/repo.conf
-						editConfig $repoAlias "$user/$repoName" ${XMPL_HOME}/.xmpl/repo.conf		
+						editConfig $repoAlias "$user/$repoName" ${XMPL_HOME}/.xmpl/repo.conf	
 					fi
 				fi
 			fi
@@ -511,8 +511,8 @@ function syncRepository {
 
 	response=${response,,} # tolower
 	if [[ $response =~ ^(yes|y| ) || -z $response ]]; then
+		git pull >&2
 		if [ $XMPL_USERNAME != 'xmpl-tool' ];then
-			git pull >&2
 			if grep upstream <(git remote -v ) -q; then   
 				git fetch upstream >&2
 				git merge upstream/master >&2
@@ -661,6 +661,7 @@ function listAllPackages {
 
 		local out names paths urls i n j raw data input
 
+		#TODO: check if 0 results
 		if [ $XMPL_MODE_ONLINE -ge 1 ];then
 			out=$(curl --silent https://api.github.com/search/code?q=path:commands+extension:desc+repo:${XMPL_REPO} --stderr - | jq '.items[] | {name, path, html_url}') #Get results from API
 			names+=($(echo "$out" | jq -r '.name' | sort | sed -E 's/.xmpl|.desc//')) #Parse names in array
@@ -682,6 +683,10 @@ function listAllPackages {
 		
 			out=$(intersectionGrep "." "" "desc" ${XMPL_HOME}/.xmpl/repos/${XMPL_REPO} | sort)
 			#dirname $out
+			if [[ -z "${out}" ]];then
+				echo -e "\e[33mEmpty repository!\e[39m" >&2
+				return 1
+			fi
 			names+=($(echo "$out" | sed -e 's/.*\///' -e 's/.desc//'))
 			paths+=($(dirname $out | sed 's/.*\///')) #Parse paths in array
 			urls+=($(echo "$out" ))
@@ -717,7 +722,7 @@ function listAllPackages {
 					#check if input is number
 					if ! [ "$input" -eq "$input" ] 2>/dev/null; then
 						#if not find id by name
-					   	input=($(printf '%s\n' "${paths[@]}" | grep -nw $input | cut -f1 -d:))
+					   	input=($(printf '%s\n' "${paths[@]}" | grep -n '^'$input'$' | cut -f1 -d:))
 					fi
 				done
 				input=$((input-1)) # input = userinput - 1
@@ -968,6 +973,7 @@ function deleteExample {
 	if ! [ -f ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package/$package.desc >& /dev/null ] ;then
 		echo "Package '$package' does not exists!" >&2
 	else
+	
 		#get and sort examples
 			out=$(intersectionGrep "$package" "$query" "xmpl" "${XMPL_HOME}/.xmpl/repos/$XMPL_REPO" | sort) #get local results
 			names+=($(echo "$out" | sed -e 's/.*\///' -e 's/.xmpl//')) #Parse names in array
@@ -975,6 +981,7 @@ function deleteExample {
 			urls+=($(echo "$out" )) #Parse urls in array
 					
 			if [ "${#names[@]}" -ge 1 ]; then #For 1 or more example result
+			echo "Select the example you want to delete!" >&2
 				i=0	#Set counter to 0
 					for n in ${names[@]}; do #For each example
 						i=$((i+1)) #Counter +1
@@ -1045,6 +1052,7 @@ function xmplEditor {
 	while [ -z ${package} ];do
 		echo -e "Enter package name:" >&2
 		read -e package
+		package=$(echo "$package" | awk '{print $1;}')
 	done
 	
 		if [[ ! -z ${package} ]];then
@@ -1309,10 +1317,10 @@ function showHelp {
 		echo -e " \e[1mxmpl\e[0m"
 		echo -e "	\e[1mfilter_1 filter_2\e[0m"
 		echo -e "	[--search] \e[1mfilter_1 filter_2\e[0m"
-		echo -e "	[--package] [--edit] [--editor] [--delete] \e[1mpackage\e[0m"
+		echo -e "	[--package] [--edit] \e[1mpackage\e[0m"
 		echo -e "	[--input] [--execute] [--execute-last] \e[1margument_1 argument_2\e[0m"
 		echo -e "	[--new-repo] \e[1mgithub_user/repo\e[0m"
-		echo -e "	[--remove-repo] [--change-repo] [--save-repo]"
+		echo -e "	[--delete-repo] [--change-repo] [--save-repo]"
 		echo -e "	[--sync-repo] [--pull-request] \e[1mrepo_alias\e[0m"
 		echo -e "	[--comments] [--raw] [--online] [--full-online] [--last]"
 		echo -e "	[--install] [--update] [--deinstall] [--version] [--help]"
@@ -1378,7 +1386,7 @@ function showHelp {
 ##################################################################
 # MAIN SCRIPT
 
-version='1.0.5'
+version='1.0.6'
 
 oIFS=$IFS 	#Saving old IFS
 IFS=$'\n' 	#Delimiter to new line

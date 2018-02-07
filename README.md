@@ -1,5 +1,5 @@
 # xmpl-tool
-### v1.0.5
+### v1.0.6
 xmpl tool is a simple script created for fast searching, fetching, and executing examples of Linux commands from online, or local command repositories.
 
 The tool uses GitHub as the repository backend, giving the community the ability to update the repository with new commands and usage examples.
