@@ -661,7 +661,6 @@ function listAllPackages {
 
 		local out names paths urls i n j raw data input
 
-		#TODO: check if 0 results
 		if [ $XMPL_MODE_ONLINE -ge 1 ];then
 			out=$(curl --silent https://api.github.com/search/code?q=path:commands+extension:desc+repo:${XMPL_REPO} --stderr - | jq '.items[] | {name, path, html_url}') #Get results from API
 			names+=($(echo "$out" | jq -r '.name' | sort | sed -E 's/.xmpl|.desc//')) #Parse names in array
@@ -682,7 +681,8 @@ function listAllPackages {
 			fi
 		
 			out=$(intersectionGrep "." "" "desc" ${XMPL_HOME}/.xmpl/repos/${XMPL_REPO} | sort)
-			#dirname $out
+			
+			#check if 0 results
 			if [[ -z "${out}" ]];then
 				echo -e "\e[33mEmpty repository!\e[39m" >&2
 				return 1
