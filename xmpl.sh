@@ -830,7 +830,7 @@ function executeMode {
 				fi	
 				
 				if [[ $XMPL_MODE_INPUT == 1 ]]; then #User puts arguments
-					arguments=$(echo $XMPL_PRE_RESULT | grep -Po '{:[^:]*:}') #Get all arguments from example
+					arguments=$(echo $XMPL_PRE_RESULT | grep -Po '{:.*:}') #Get all arguments from example
 					
 					if [[ ${arguments} != '' ]];then #If arguments exists
 						echo -e "\e[93m\c" >&2 #Color yellow
@@ -864,7 +864,8 @@ function executeMode {
 									
 								else
 									trap 'return' INT #return to ctrl+c for exiting read function
-									echo -e "\e[36m$arg:\e[39m" | sed -e 's/{://' -e 's/:}//' >&2 #Asking user to input argument
+									echo -e "\e[36m$arg:\e[39m" | sed -e 's/{:://' -e 's/::}//' -e 's/{://' -e 's/:}//'  >&2 #Asking user to input value
+																		
 									if [ "$XMPL_LAST_URL" == "$eurl" ];then
 										if [[ ! ${old_inputs[$a]: -1} == " " ]]; then
 											read -e -i "${old_inputs[$a]}" parm #read input with last input suggestion
@@ -882,6 +883,7 @@ function executeMode {
 									else
 										read -e parm #read new input
 									fi
+									
 									trap - INT
 									parm=$(echo "${parm%% }") #remove last whitespace from user input (because autocomplete end with whitespace)
 									if [ ${parm:0:1} == "\"" ] && [ ${parm: -1} == "\"" ];then #if value is commented with double quote
@@ -897,7 +899,11 @@ function executeMode {
 								fi
 
 								#parms ecape chars 3x
-								parm=$(echo "${parm}" | sed -e 's/\\/\\\\/g; s/ /\\ /g;' | sed -e 's/\\/\\\\\\\\/g; s/&/\\\\\\&/g;' )
+								if [ ! -z $(echo $arg | grep -Po '{::.*::}') ];then
+									parm=$(echo "${parm}" | sed -e 's/\\/\\\\/g;' | sed -e 's/\\/\\\\\\\\/g; s/&/\\\\\\&/g;' )
+								else
+									parm=$(echo "${parm}" | sed -e 's/\\/\\\\/g; s/ /\\ /g;' | sed -e 's/\\/\\\\\\\\/g; s/&/\\\\\\&/g;' )
+								fi
 
 								XMPL_RESULT=$(echo "$XMPL_RESULT" | sed -e 's,'"$arg"','"$parm"',') #Putting argument in command
 								XMPL_PRE_RESULT=$(echo "$XMPL_PRE_RESULT" | sed -e 's,'"$arg"','"$parm"',') #Putting argument in command
@@ -1140,7 +1146,7 @@ function xmplEditor {
 			while : ;do
 			response2=NO
 				while [[ ! $response2 =~ ^(yes|y) ]]; do
-					echo -e "Enter command with input variable structure {:variable name:}" >&2
+					echo -e "Enter command with input variable structure {:normal input:} or {::list input::}" >&2
 					if [[ $(echo "$data" | wc -l) == "1" ]] && [[ "$XMPL_MODE_EDIT" != "2" ]];then
 						read -e -i "$data" data
 					else
