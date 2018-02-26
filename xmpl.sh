@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# xmpl-tool v1.0.6
+# xmpl-tool v1.0.7
 # Author: Ivan Krpan
-# Date: 07.02.2018
+# Date: 26.02.2018
 
 ##################################################################
 # EXIT FUNCTIONS
@@ -14,7 +14,7 @@ function byebye {
 	unset -f installPrivateRepo
 	unset -f uninstallSourced
 	
-	unset i repo package status git_repo XMPL_OUTPUT OPTARG OPTIND flag inputs old_inputs query flags XMPL_REPO oIFS XMPL_PACKAGE XMPL_QUERY XMPL_LAST_REPO_UPDATE XMPL_DEFAULT_REPO
+	unset i repo package status git_repo XMPL_OUTPUT OPTARG OPTIND flag inputs old_inputs query flags XMPL_REPO oIFS XMPL_PACKAGE XMPL_QUERY XMPL_LAST_REPO_UPDATE XMPL_DEFAULT_REPO XMPL_DEFAULT_EDITOR
 	unset XMPL_PRE_RESULT XMPL_USER XMPL_HOME XMPL_MODE_QUERY XMPL_MODE_EDIT XMPL_MODE_RAW XMPL_MODE_INPUT XMPL_MODE_EXECUTE XMPL_MODE_ONLINE XMPL_MODE_HISTORY XMPL_MODE_NULL fkey version
 	
 	trap - INT
@@ -31,6 +31,7 @@ function ctrl_c {
 
 	exit 1
 }
+
 ##################################################################
 # INSTALL FUNCTIONS
 
@@ -207,7 +208,7 @@ function updateLocal {
 
 }
 
-function deinstallLocal {
+function uninstallLocal {
 
 	local response response2
 	#Check permissions
@@ -1143,12 +1144,29 @@ function xmplEditor {
 					if [[ $(echo "$data" | wc -l) == "1" ]] && [[ "$XMPL_MODE_EDIT" != "2" ]];then
 						read -e -i "$data" data
 					else
+
+					
 						read -p "This will open multiline editor! OK?" >&2
-						echo "$data" >  ${XMPL_HOME}/.xmpl/edit.tmp
-						editor ${XMPL_HOME}/.xmpl/edit.tmp
-						cat ${XMPL_HOME}/.xmpl/edit.tmp >&2
-						data=$(cat ${XMPL_HOME}/.xmpl/edit.tmp)
-						rm ${XMPL_HOME}/.xmpl/edit.tmp
+						echo "$data" > /tmp/xmpl_tmp_example
+						
+						if [ ! -z $XMPL_DEFAULT_EDITOR ];then
+							$XMPL_DEFAULT_EDITOR /tmp/xmpl_tmp_example
+						elif type -ta editor; then
+							editor /tmp/xmpl_tmp_example
+						elif ! [ -z $EDITOR ];then
+							$EDITOR /tmp/xmpl_tmp_example
+						else
+							while [ -z $(type -ta $XMPL_DEFAULT_EDITOR) ]; do
+								echo -e "\e[33mPlease enter the default text editor for the Xmpl tool:\e[39m" >&2
+								read XMPL_DEFAULT_EDITOR
+							done
+							editConfig "XMPL_DEFAULT_EDITOR" $XMPL_DEFAULT_EDITOR ${XMPL_HOME}/.xmpl/xmpl.conf
+							$XMPL_DEFAULT_EDITOR /tmp/xmpl_tmp_example
+						fi
+						
+						cat /tmp/xmpl_tmp_example >&2
+						data=$(cat /tmp/xmpl_tmp_example)
+						rm /tmp/xmpl_tmp_example
 					fi
 					echo -e "Is this command correct? [y/N]" >&2
 					read response2
@@ -1323,7 +1341,7 @@ function showHelp {
 		echo -e "	[--remove-repo] [--change-repo] [--save-repo]"
 		echo -e "	[--sync-repo] [--pull-request] \e[1mrepo_alias\e[0m"
 		echo -e "	[--comments] [--raw] [--online] [--full-online] [--last]"
-		echo -e "	[--install] [--update] [--deinstall] [--version] [--help]"
+		echo -e "	[--install] [--update] [--uninstall] [--version] [--help]"
 	else
 		echo "No-install usage:"
 		echo "	"
@@ -1360,7 +1378,7 @@ function showHelp {
     echo "   -I			 --install	Install on local system"
 	if [ -f ${XMPL_HOME}/.xmpl/repo.conf ];then
 		echo "   -U			 --update	Update to latest version"
-		echo "   -D			 --deinstall	Deinstall from local system"
+		echo "   -D			 --uninstall	Uninstall from local system"
 		echo "   "
 		echo "   -n [github_user/repo] --new-repo	Add new private repository"	  
 		echo "   -m [repo_alias]	 --remove-repo	Delete local repository"	  
@@ -1386,7 +1404,7 @@ function showHelp {
 ##################################################################
 # MAIN SCRIPT
 
-version='1.0.6'
+version='1.0.7'
 
 oIFS=$IFS 	#Saving old IFS
 IFS=$'\n' 	#Delimiter to new line
@@ -1463,7 +1481,7 @@ while getopts $flags flag; do
 		"execute-last" )flag=X;;
 		"install" )		flag=I;;
 		"update" ) 		flag=U;;
-		"deinstall" ) 	flag=D;;
+		"uninstall" ) 	flag=D;;
 		"new-repo" ) 	flag=n;;
 		"remove-repo" )	flag=m;;
 		"change-repo" )	flag=r;;
@@ -1601,8 +1619,8 @@ while getopts $flags flag; do
 		fi
 	;;
 	D )
-		#Deinstall local
-		deinstallLocal
+		#Uninstall local
+		uninstallLocal
 		byebye #?
 		if ! return >& /dev/null; then
 			exit
@@ -1701,6 +1719,7 @@ while getopts $flags flag; do
 
 		XMPL_MODE_QUERY=0
 		XMPL_MODE_EDIT=2
+		
 		if [ ! return >& /dev/null ];then
 			exit
 		fi
