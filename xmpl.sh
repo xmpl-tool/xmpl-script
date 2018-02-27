@@ -2,7 +2,7 @@
 
 # xmpl-tool v1.0.7
 # Author: Ivan Krpan
-# Date: 26.02.2018
+# Date: 27.02.2018
 
 ##################################################################
 # EXIT FUNCTIONS
@@ -16,6 +16,8 @@ function byebye {
 	
 	unset i repo package status git_repo XMPL_OUTPUT OPTARG OPTIND flag inputs old_inputs query flags XMPL_REPO oIFS XMPL_PACKAGE XMPL_QUERY XMPL_LAST_REPO_UPDATE XMPL_DEFAULT_REPO XMPL_DEFAULT_EDITOR
 	unset XMPL_PRE_RESULT XMPL_USER XMPL_HOME XMPL_MODE_QUERY XMPL_MODE_EDIT XMPL_MODE_RAW XMPL_MODE_INPUT XMPL_MODE_EXECUTE XMPL_MODE_ONLINE XMPL_MODE_HISTORY XMPL_MODE_NULL fkey version
+	
+	export XMPL_LAST_EXAMPLE XMPL_LAST_PATH XMPL_LAST_URL
 	
 	trap - INT
 	echo -e "\e[39m\c" >&2
@@ -153,7 +155,13 @@ function installLocal {
 		SCRIPTPATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 		cp $SCRIPTPATH /usr/local/bin/xmpl
 		chmod +x /usr/local/bin/xmpl
-
+		
+		#enabling history for root user
+		if ! grep -Fxq 'Defaults       env_keep += "XMPL_LAST_*"' /etc/sudoers
+			then
+				echo 'Defaults       env_keep += "XMPL_LAST_*"' >> /etc/sudoers
+		fi
+		
 		export -f installSourced
 		export -f editConfig
 		
@@ -225,6 +233,10 @@ function uninstallLocal {
 		#Remove Aaliass 
 		export -f uninstallSourced
 		su $XMPL_USER -c "uninstallSourced"
+		#Remove sudo variables
+		if grep -Fxq 'Defaults       env_keep += "XMPL_LAST_*"' /etc/sudoers;then
+			sed -i '/Defaults       env_keep += "XMPL_LAST_*"/d' /etc/sudoers
+		fi
 		#Remove script
 		rm -f /usr/local/bin/xmpl
 		echo -e "Do you want to remove all your local repositories? [Y/n]" >&2
