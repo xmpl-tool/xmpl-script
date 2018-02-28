@@ -2,7 +2,7 @@
 
 # xmpl-tool v1.0.7
 # Author: Ivan Krpan
-# Date: 27.02.2018
+# Date: 28.02.2018
 
 ##################################################################
 # EXIT FUNCTIONS
@@ -20,18 +20,8 @@ function byebye {
 	export XMPL_LAST_EXAMPLE XMPL_LAST_PATH XMPL_LAST_URL
 	
 	trap - INT
+	history -r ~/.bash_history
 	echo -e "\e[39m\c" >&2
-}
-
-function escapeBreak {
-
-	fkey="\e"
-	break
-}
-
-function ctrl_c {
-
-	exit 1
 }
 
 ##################################################################
@@ -671,7 +661,7 @@ function queryExamples {
 }
 
 function listAllPackages {
-
+trap 'return 1;byebye' INT
 		local out names paths urls i n j raw data input
 
 		if [ $XMPL_MODE_ONLINE -ge 1 ];then
@@ -705,12 +695,13 @@ function listAllPackages {
 			urls+=($(echo "$out" ))
 		fi
 		i=0
-		trap escapeBreak INT
+		rm /tmp/xmplSuggestions
 		for n in ${names[@]}; do #For each title
 			
 			echo -e "\e[96m\c" >&2 #Color cyan
 				j=$(( $i + 1 ))
 				echo -e "$j ${paths[$i]}  \c" >&2  #Print package name to stdout
+				echo "$j ${paths[$i]}" >> /tmp/xmplSuggestions
 
 			echo -e "\e[32m\c" >&2 #Color green
 			if [ $XMPL_MODE_ONLINE == 1 ];then
@@ -725,13 +716,16 @@ function listAllPackages {
 			echo -e "\e[39m\c" >&2 #Color default
 			i=$((i+1)) #Counter + 1
 		done
-		trap '' INT						
+					
 				input=0 #Set input to 0	
 				while ! [ "$input" -le "$j" -a "$input" -gt 0 ] 2>/dev/null; do
 					#Reading user input
-					if ! input=$(test -z $fkey && xmplRead "Please select package:" 1 1 $i || return 1);then
-						return 1
-					fi	
+					echo "Please select package:" >&2
+					history -cr /tmp/xmplSuggestions
+					read -e input
+					input=$(echo $input | awk '{print $1;}')
+					history -r ~/.bash_history
+				
 					#check if input is number
 					if ! [ "$input" -eq "$input" ] 2>/dev/null; then
 						#if not find id by name
@@ -745,6 +739,7 @@ function listAllPackages {
 }
 
 function selectMode {
+trap 'return 1;byebye' INT
 
 		local package query names paths urls out i n input 
 
@@ -763,24 +758,30 @@ function selectMode {
 			urls+=($(echo "$out" )) #Parse urls in array
 		fi
 		
+		rm /tmp/xmplSuggestions
 		i=0	#Set counter to 0
 		if [ "${#names[@]}" -gt 1 ]; then #For more then 1 example result
-			trap escapeBreak INT #enable ctrl-c while listing
+
 			for n in ${names[@]}; do #For each example
 				i=$((i+1)) #Counter +1
 				if [[ $package == "." || $package == "+" ]];then
 					echo -e "\e[96m$i ${paths[$((i-1))]} \e[32m$n\e[39m" >&2 #Print title to selection list
+					echo "$i ${paths[$((i-1))]}: $n" >> /tmp/xmplSuggestions
 				else
-					echo -e "\e[96m$i \e[32m$n\e[39m" >&2 #Print title to selection list	
+					echo -e "\e[96m$i \e[32m$n\e[39m" >&2 #Print title to selection list
+					echo "$i $n" >> /tmp/xmplSuggestions					
 				fi
 			done
-			trap '' INT #reset ctrl-c
 			input=0 #Set input to 0	
 			#Reading user input
 			while ! [ "$input" -le "$i" -a "$input" -gt 0 ] 2>/dev/null; do
-				if ! input=$(test -z $fkey && xmplRead "Please select example number:" 1 1 $i || return 1);then
-					return 1
-				fi	
+			
+				echo "Please select example number:" >&2
+				history -cr /tmp/xmplSuggestions
+				read -e input
+				input=$(echo $input | awk '{print $1;}')
+				history -r ~/.bash_history
+					
 			done
 						
 			input=$((input-1)) #Real input = User input - 1
@@ -966,6 +967,7 @@ function executeMode {
 # EDITOR FUNCTIONS
 
 function deleteExample {
+trap 'return 1;byebye' INT
 
 	local input package newRepoAlias XMPL_USERNAME response names paths urls out
 		
@@ -998,20 +1000,23 @@ function deleteExample {
 			names+=($(echo "$out" | sed -e 's/.*\///' -e 's/.xmpl//')) #Parse names in array
 			paths+=($(dirname $out 2>/dev/null | sed 's/.*\///')) #Parse paths in array
 			urls+=($(echo "$out" )) #Parse urls in array
-					
+			rm /tmp/xmplSuggestions		
 			if [ "${#names[@]}" -ge 1 ]; then #For 1 or more example result
 			echo "Select the example you want to delete!" >&2
 				i=0	#Set counter to 0
 					for n in ${names[@]}; do #For each example
 						i=$((i+1)) #Counter +1
 						echo -e "\e[96m$i \e[32m$n\e[39m" >&2 #Print title to selection list
+						echo "$i $n" >> /tmp/xmplSuggestions
 					done
 					input=-1 #Set input to -1
 					while ! [ "$input" -le "$i" -a "$input" -ge 0 ] 2>/dev/null; do
 						#Asking user to select example
-						if ! input="$(xmplRead 'Please select example number:' '' 1 $i)";then
-							return 1
-						fi
+						echo "Please select example number:" >&2
+						history -cr /tmp/xmplSuggestions
+						read -e input
+						input=$(echo $input | awk '{print $1;}')
+						history -r ~/.bash_history
 					done
 					
 					input=$((input-1)) #Real input = User input - 1
@@ -1049,6 +1054,7 @@ function deleteExample {
 
 
 function xmplEditor {
+trap 'return 1;byebye' INT
 
 	local input data tags title package newRepoAlias XMPL_USERNAME response response2 names paths urls outFile out
 
@@ -1110,20 +1116,24 @@ function xmplEditor {
 			urls+=($(echo "$out" )) #Parse urls in array
 					
 			if [ "${#names[@]}" -ge 1 ]; then #For 1 or more example result
-			
+			echo "0 NEW" > /tmp/xmplSuggestions
 			i=0	#Set counter to 0
 			echo -e "\e[96m$i \e[32mNEW\e[39m" >&2 #Print title to selection list
 
 				for n in ${names[@]}; do #For each example
 					i=$((i+1)) #Counter +1
 					echo -e "\e[96m$i \e[32m$n\e[39m" >&2 #Print title to selection list
+					echo "$i $n" >> /tmp/xmplSuggestions
 				done
 				input=-1 #Set input to -1
 				while ! [ "$input" -le "$i" -a "$input" -ge 0 ] 2>/dev/null; do
 					#Asking user to select example
-					if ! input="$(xmplRead 'Please select example number:' 0 0 $i)";then
-						return 1
-					fi
+					echo "Please select example number:" >&2
+					history -cr /tmp/xmplSuggestions
+					read -e -i "0" input
+					input=$(echo $input | awk '{print $1;}')
+					history -r ~/.bash_history
+					
 				done
 				
 				input=$((input-1)) #Real input = User input - 1
@@ -1259,92 +1269,6 @@ function intersectionGrep {
 	echo "$first"
 }
 
-
-function xmplRead {
-
-	local IFS final input tmp message default min max
-
-	message=$1
-	default=$2
-	min=$3
-	max=$4
-	
-	echo -e '\e[97m\c' >&2
-	echo -e $message >&2 
-	echo -e '\e[39m\c' >&2
-	if [[ ${default} != ${min} ]];then
-		final=$2
-		echo -e "$final\c" >&2
-	fi
-
-	trap ctrl_c INT
-	IFS=""
-	while read -r -n1 -s input
-	do
-
-		if [[  ${input} == $'\e' ]];then
-			read -rsn1 -t 0.1 tmp
-				if [[ "$tmp" == "[" ]]; then
-					read -rsn1 -t 0.1 tmp
-					case "$tmp" in
-						"B" ) 
-							if [ ! -z $min ];then
-								if [ -z $final ];then
-									final=$((min-1))
-								fi
-								if [ "$final" -eq "$final" >& /dev/null ]; then 
-									echo -e "\033[2K\c" >&2 
-									final=$((final + 1))
-									[ $final -gt $max ] && final=$min
-									echo -e "\r$final\c" >&2
-								fi
-							fi
-						;;
-						"A" ) 
-							if [ ! -z $min ];then
-								if [ -z $final ];then
-									final=$((min-1))
-								fi
-								if [ "$final" -eq "$final" >& /dev/null ]; then 
-									echo -e "\033[2K\c" >&2 
-									final=$((final - 1))
-									[ $final -lt $min ] && final=$max
-									echo -e "\r$final\c" >&2
-								fi
-							fi
-						;;
-					#	"C" )
-					#		echo "Right\n" >&2
-					#	"D" ) 
-					#		echo "Left\n" >&2
-					#	;;
-						* )
-							read -rsn1 -t 0.1 tmp
-						;;
-					esac
-				else
-					echo "" >&2
-					return 1
-				fi
-		
-		elif [ "${input}" == $'\177' ] || [ "${input}" == $'\b' ];then
-			final="${final%?}"
-			echo -e "\r\033[K${final}\c" >&2
-		elif [[ ${input} == "" ]];then
-			echo "$final"
-			echo -e "" >&2
-			return 0
-		else
-			if [ -z ${tmp} ];then
-				final+=$input
-				echo -e "$input\c" >&2
-			else
-				unset tmp
-			fi
-		fi
-	done
-}
-
 function showHelp {
 	echo "	"
 	if [ -f ${XMPL_HOME}/.xmpl/repo.conf ];then
@@ -1423,6 +1347,8 @@ function showHelp {
 # MAIN SCRIPT
 
 version='1.0.7'
+
+history -a
 
 oIFS=$IFS 	#Saving old IFS
 IFS=$'\n' 	#Delimiter to new line
