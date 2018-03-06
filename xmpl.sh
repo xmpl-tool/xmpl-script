@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# xmpl-tool v1.0.6
+# xmpl-tool v1.0.7
 # Author: Ivan Krpan
-# Date: 07.02.2018
+# Date: 06.03.2018
 
 ##################################################################
 # EXIT FUNCTIONS
@@ -14,23 +14,17 @@ function byebye {
 	unset -f installPrivateRepo
 	unset -f uninstallSourced
 	
-	unset i repo package status git_repo XMPL_OUTPUT OPTARG OPTIND flag inputs old_inputs query flags XMPL_REPO oIFS XMPL_PACKAGE XMPL_QUERY XMPL_LAST_REPO_UPDATE XMPL_DEFAULT_REPO
+	unset i repo package status git_repo XMPL_OUTPUT OPTARG OPTIND flag inputs old_inputs query flags XMPL_REPO oIFS XMPL_PACKAGE XMPL_QUERY XMPL_LAST_REPO_UPDATE XMPL_DEFAULT_REPO XMPL_DEFAULT_EDITOR
 	unset XMPL_PRE_RESULT XMPL_USER XMPL_HOME XMPL_MODE_QUERY XMPL_MODE_EDIT XMPL_MODE_RAW XMPL_MODE_INPUT XMPL_MODE_EXECUTE XMPL_MODE_ONLINE XMPL_MODE_HISTORY XMPL_MODE_NULL fkey version
 	
+	export XMPL_LAST_EXAMPLE XMPL_LAST_PATH XMPL_LAST_URL
+	
 	trap - INT
+	history -r ~/.bash_history
+	rm /tmp/xmplSuggestions 2>/dev/null
 	echo -e "\e[39m\c" >&2
 }
 
-function escapeBreak {
-
-	fkey="\e"
-	break
-}
-
-function ctrl_c {
-
-	exit 1
-}
 ##################################################################
 # INSTALL FUNCTIONS
 
@@ -152,7 +146,13 @@ function installLocal {
 		SCRIPTPATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 		cp $SCRIPTPATH /usr/local/bin/xmpl
 		chmod +x /usr/local/bin/xmpl
-
+		
+		#enabling history for root user
+		if ! grep -Fxq 'Defaults       env_keep += "XMPL_LAST_*"' /etc/sudoers
+			then
+				echo 'Defaults       env_keep += "XMPL_LAST_*"' >> /etc/sudoers
+		fi
+		
 		export -f installSourced
 		export -f editConfig
 		
@@ -207,7 +207,7 @@ function updateLocal {
 
 }
 
-function deinstallLocal {
+function uninstallLocal {
 
 	local response response2
 	#Check permissions
@@ -224,6 +224,10 @@ function deinstallLocal {
 		#Remove Aaliass 
 		export -f uninstallSourced
 		su $XMPL_USER -c "uninstallSourced"
+		#Remove sudo variables
+		if grep -Fxq 'Defaults       env_keep += "XMPL_LAST_*"' /etc/sudoers;then
+			sed -i '/Defaults       env_keep += "XMPL_LAST_*"/d' /etc/sudoers
+		fi
 		#Remove script
 		rm -f /usr/local/bin/xmpl
 		echo -e "Do you want to remove all your local repositories? [Y/n]" >&2
@@ -454,12 +458,62 @@ function syncRepository {
 	cd ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO
 	git add . >&2
 	git remote update >&2
-	
+	if ! git diff @{upstream} --quiet --;then
+
+		changes+="$(git diff @{upstream} --name-only)"
+		fcnt=$(echo "$changes" | wc -l) 
+		echo "$fcnt file/s changed!" >&2
+		echo "$changes" >&2
+		echo -e "Do you want to synchronize '$XMPL_CURRENT_REPO' repository? [Y/n]" >&2
+		read response
+		
+		response=${response,,} # tolower
+		if [[ $response =~ ^(yes|y| ) || -z $response ]]; then
+			git pull >&2
+			if [ $XMPL_USERNAME != 'xmpl-tool' ];then
+				if grep upstream <(git remote -v ) -q; then   
+					git fetch upstream >&2
+					git merge -m "Updates from upstream" upstream/master >&2
+				fi
+				cpackages=$(echo -e "$changes" | awk -F "/" '{print $2}' | uniq | tr "\n" " ")
+				commitMsg="$(echo -e "$fcnt file/s changed (${cpackages%% })\n$changes")"
+				git commit -m "${commitMsg}" >&2
+				while : ;do
+					git push origin master >&2 && break
+						echo -e "Try again? [Y/n]" >&2
+						read response
+						response=${response,,} # tolower
+						if [[ $response =~ ^(no|n) ]]; then
+							break
+						fi
+				done
+			fi
+		fi
+		if [ $XMPL_USERNAME == 'xmpl-tool' ];then
+			editConfig 'XMPL_LAST_REPO_UPDATE' $(date +%F) ~/.xmpl/xmpl.conf
+			XMPL_LAST_REPO_UPDATE=$(date +%F)
+		fi
+		#cd $tpwd
+	fi	
+
 	if git diff @{upstream} --quiet --;then
 		status=$(curl --silent https://api.github.com/repos/xmpl-tool/xmpl-repo/compare/xmpl-tool:master...$XMPL_USERNAME:master --stderr - | jq -r '.status')
-		
-		if [ "$status" != "behind" ];then
+		#echo $status >&2
+				
+		if [ "$status" == "identical" -o "$status" == "ahead" ]; then
+			if [ $XMPL_USERNAME == 'xmpl-tool' ];then
+				editConfig 'XMPL_LAST_REPO_UPDATE' $(date +%F) ~/.xmpl/xmpl.conf
+				XMPL_LAST_REPO_UPDATE=$(date +%F)
+			fi
+			echo -e '\e[33mRepository up to date!\e[39m' >&2
+			if [ "$status" == "ahead" ];then
+				echo -e "\e[33mUse 'xmpl -P $XMPL_CURRENT_REPO' to share private changes!\e[39m" >&2
+			fi
 			
+			cd $tpwd
+			return
+		elif [ "$status" == "behind" ];then
+
 			if [ $XMPL_USERNAME == 'xmpl-tool' ];then
 				echo -e "Do you want to synchronize '$XMPL_CURRENT_REPO' repository? [Y/n]" >&2
 				read response
@@ -478,6 +532,7 @@ function syncRepository {
 			cd $tpwd
 			return
 		else
+
 			echo -e "Do you want to synchronize '$XMPL_CURRENT_REPO' repository? [Y/n]" >&2
 			read response
 
@@ -487,7 +542,7 @@ function syncRepository {
 				if grep upstream <(git remote -v ) -q; then   
 					#if [ $XMPL_USERNAME != 'xmpl-tool' ];then
 						git fetch upstream >&2
-						git merge upstream/master >&2
+						git merge -m "Updates from upstream" upstream/master >&2
 					#fi
 				fi
 			fi
@@ -501,42 +556,6 @@ function syncRepository {
 		fi	
 	fi
 
-
-	changes+="$(git diff @{upstream} --name-only)"
-	fcnt=$(echo "$changes" | wc -l) 
-	echo "$fcnt file/s changed!" >&2
-	echo "$changes" >&2
-	echo -e "Do you want to synchronize '$XMPL_CURRENT_REPO' repository? [Y/n]" >&2
-	read response
-
-	response=${response,,} # tolower
-	if [[ $response =~ ^(yes|y| ) || -z $response ]]; then
-		git pull >&2
-		if [ $XMPL_USERNAME != 'xmpl-tool' ];then
-			if grep upstream <(git remote -v ) -q; then   
-				git fetch upstream >&2
-				git merge upstream/master >&2
-			fi
-			cpackages=$(echo -e "$changes" | awk -F "/" '{print $2}' | uniq | tr "\n" " ")
-			commitMsg="$(echo -e "$fcnt file/s changed (${cpackages%% })\n$changes")"
-			git commit -m "${commitMsg}" >&2
-			while : ;do
-				git push origin master >&2 && break
-					echo -e "Try again? [Y/n]" >&2
-					read response
-					response=${response,,} # tolower
-					if [[ $response =~ ^(no|n) ]]; then
-						break
-					fi
-			done
-		fi
-	fi
-	if [ $XMPL_USERNAME == 'xmpl-tool' ];then
-		editConfig 'XMPL_LAST_REPO_UPDATE' $(date +%F) ~/.xmpl/xmpl.conf
-		XMPL_LAST_REPO_UPDATE=$(date +%F)
-	fi
-	cd $tpwd
-	
 }
 
 function pullRepository {
@@ -658,7 +677,7 @@ function queryExamples {
 }
 
 function listAllPackages {
-
+trap 'echo "" >&2;return 1;byebye;' INT 
 		local out names paths urls i n j raw data input
 
 		if [ $XMPL_MODE_ONLINE -ge 1 ];then
@@ -692,12 +711,13 @@ function listAllPackages {
 			urls+=($(echo "$out" ))
 		fi
 		i=0
-		trap escapeBreak INT
+		rm /tmp/xmplSuggestions 2>/dev/null
 		for n in ${names[@]}; do #For each title
 			
 			echo -e "\e[96m\c" >&2 #Color cyan
-				j=$(( $i + 1 ))
+				j=$((i+1))
 				echo -e "$j ${paths[$i]}  \c" >&2  #Print package name to stdout
+				echo "$j ${paths[$i]}" >> /tmp/xmplSuggestions
 
 			echo -e "\e[32m\c" >&2 #Color green
 			if [ $XMPL_MODE_ONLINE == 1 ];then
@@ -710,21 +730,24 @@ function listAllPackages {
 			fi
 			echo "$data" | head -1 >&2   #Print output to stdout
 			echo -e "\e[39m\c" >&2 #Color default
-			i=$((i+1)) #Counter + 1
+			i=$((i+1))  #Counter + 1
 		done
-		trap '' INT						
+					
 				input=0 #Set input to 0	
 				while ! [ "$input" -le "$j" -a "$input" -gt 0 ] 2>/dev/null; do
 					#Reading user input
-					if ! input=$(test -z $fkey && xmplRead "Please select package:" 1 1 $i || return 1);then
-						return 1
-					fi	
+					echo "Please select package:" >&2
+					history -cr /tmp/xmplSuggestions
+					read -e input
+					input=$(echo $input | awk '{print $1;}')
+					history -r ~/.bash_history
+				
 					#check if input is number
 					if ! [ "$input" -eq "$input" ] 2>/dev/null; then
 						#if not find id by name
 					   	input=($(printf '%s\n' "${paths[@]}" | grep -n '^'$input'$' | cut -f1 -d:))
 					fi
-				done
+				done 
 				input=$((input-1)) # input = userinput - 1
 				#select package
 				selectMode ${names[$input]}
@@ -732,6 +755,7 @@ function listAllPackages {
 }
 
 function selectMode {
+trap 'echo "" >&2;return 1;byebye;' INT
 
 		local package query names paths urls out i n input 
 
@@ -750,24 +774,30 @@ function selectMode {
 			urls+=($(echo "$out" )) #Parse urls in array
 		fi
 		
+		rm /tmp/xmplSuggestions 2>/dev/null
 		i=0	#Set counter to 0
 		if [ "${#names[@]}" -gt 1 ]; then #For more then 1 example result
-			trap escapeBreak INT #enable ctrl-c while listing
+
 			for n in ${names[@]}; do #For each example
 				i=$((i+1)) #Counter +1
 				if [[ $package == "." || $package == "+" ]];then
 					echo -e "\e[96m$i ${paths[$((i-1))]} \e[32m$n\e[39m" >&2 #Print title to selection list
+					echo "$i ${paths[$((i-1))]}: $n" >> /tmp/xmplSuggestions
 				else
-					echo -e "\e[96m$i \e[32m$n\e[39m" >&2 #Print title to selection list	
+					echo -e "\e[96m$i \e[32m$n\e[39m" >&2 #Print title to selection list
+					echo "$i $n" >> /tmp/xmplSuggestions					
 				fi
 			done
-			trap '' INT #reset ctrl-c
 			input=0 #Set input to 0	
 			#Reading user input
 			while ! [ "$input" -le "$i" -a "$input" -gt 0 ] 2>/dev/null; do
-				if ! input=$(test -z $fkey && xmplRead "Please select example number:" 1 1 $i || return 1);then
-					return 1
-				fi	
+			
+				echo "Please select example number:" >&2
+				history -cr /tmp/xmplSuggestions
+				read -e input
+				input=$(echo $input | awk '{print $1;}')
+				history -r ~/.bash_history
+					
 			done
 						
 			input=$((input-1)) #Real input = User input - 1
@@ -829,7 +859,7 @@ function executeMode {
 				fi	
 				
 				if [[ $XMPL_MODE_INPUT == 1 ]]; then #User puts arguments
-					arguments=$(echo $XMPL_PRE_RESULT | grep -Po '{:[^:]*:}') #Get all arguments from example
+					arguments=$(echo $XMPL_PRE_RESULT | grep -Po '{:.*:}') #Get all arguments from example
 					
 					if [[ ${arguments} != '' ]];then #If arguments exists
 						echo -e "\e[93m\c" >&2 #Color yellow
@@ -863,7 +893,8 @@ function executeMode {
 									
 								else
 									trap 'return' INT #return to ctrl+c for exiting read function
-									echo -e "\e[36m$arg:\e[39m" | sed -e 's/{://' -e 's/:}//' >&2 #Asking user to input argument
+									echo -e "\e[36m$arg:\e[39m" | sed -e 's/{:://' -e 's/::}//' -e 's/{://' -e 's/:}//'  >&2 #Asking user to input value
+																		
 									if [ "$XMPL_LAST_URL" == "$eurl" ];then
 										if [[ ! ${old_inputs[$a]: -1} == " " ]]; then
 											read -e -i "${old_inputs[$a]}" parm #read input with last input suggestion
@@ -881,6 +912,7 @@ function executeMode {
 									else
 										read -e parm #read new input
 									fi
+									
 									trap - INT
 									parm=$(echo "${parm%% }") #remove last whitespace from user input (because autocomplete end with whitespace)
 									if [ ${parm:0:1} == "\"" ] && [ ${parm: -1} == "\"" ];then #if value is commented with double quote
@@ -896,7 +928,11 @@ function executeMode {
 								fi
 
 								#parms ecape chars 3x
-								parm=$(echo "${parm}" | sed -e 's/\\/\\\\/g; s/ /\\ /g;' | sed -e 's/\\/\\\\\\\\/g; s/&/\\\\\\&/g;' )
+								if [ ! -z $(echo $arg | grep -Po '{::.*::}') ];then
+									parm=$(echo "${parm}" | sed -e 's/\\/\\\\/g;' | sed -e 's/\\/\\\\\\\\/g; s/&/\\\\\\&/g;' )
+								else
+									parm=$(echo "${parm}" | sed -e 's/\\/\\\\/g; s/ /\\ /g;' | sed -e 's/\\/\\\\\\\\/g; s/&/\\\\\\&/g;' )
+								fi
 
 								XMPL_RESULT=$(echo "$XMPL_RESULT" | sed -e 's,'"$arg"','"$parm"',') #Putting argument in command
 								XMPL_PRE_RESULT=$(echo "$XMPL_PRE_RESULT" | sed -e 's,'"$arg"','"$parm"',') #Putting argument in command
@@ -947,6 +983,7 @@ function executeMode {
 # EDITOR FUNCTIONS
 
 function deleteExample {
+trap 'echo "" >&2;return 1;byebye;' INT
 
 	local input package newRepoAlias XMPL_USERNAME response names paths urls out
 		
@@ -979,20 +1016,23 @@ function deleteExample {
 			names+=($(echo "$out" | sed -e 's/.*\///' -e 's/.xmpl//')) #Parse names in array
 			paths+=($(dirname $out 2>/dev/null | sed 's/.*\///')) #Parse paths in array
 			urls+=($(echo "$out" )) #Parse urls in array
-					
+			rm /tmp/xmplSuggestions 2>/dev/null	
 			if [ "${#names[@]}" -ge 1 ]; then #For 1 or more example result
 			echo "Select the example you want to delete!" >&2
 				i=0	#Set counter to 0
 					for n in ${names[@]}; do #For each example
 						i=$((i+1)) #Counter +1
 						echo -e "\e[96m$i \e[32m$n\e[39m" >&2 #Print title to selection list
+						echo "$i $n" >> /tmp/xmplSuggestions
 					done
 					input=-1 #Set input to -1
 					while ! [ "$input" -le "$i" -a "$input" -ge 0 ] 2>/dev/null; do
 						#Asking user to select example
-						if ! input="$(xmplRead 'Please select example number:' '' 1 $i)";then
-							return 1
-						fi
+						echo "Please select example number:" >&2
+						history -cr /tmp/xmplSuggestions
+						read -e input
+						input=$(echo $input | awk '{print $1;}')
+						history -r ~/.bash_history
 					done
 					
 					input=$((input-1)) #Real input = User input - 1
@@ -1030,6 +1070,7 @@ function deleteExample {
 
 
 function xmplEditor {
+trap 'echo "" >&2;return 1;byebye;' INT
 
 	local input data tags title package newRepoAlias XMPL_USERNAME response response2 names paths urls outFile out
 
@@ -1091,20 +1132,24 @@ function xmplEditor {
 			urls+=($(echo "$out" )) #Parse urls in array
 					
 			if [ "${#names[@]}" -ge 1 ]; then #For 1 or more example result
-			
+			echo "0 NEW" > /tmp/xmplSuggestions
 			i=0	#Set counter to 0
 			echo -e "\e[96m$i \e[32mNEW\e[39m" >&2 #Print title to selection list
 
 				for n in ${names[@]}; do #For each example
 					i=$((i+1)) #Counter +1
 					echo -e "\e[96m$i \e[32m$n\e[39m" >&2 #Print title to selection list
+					echo "$i $n" >> /tmp/xmplSuggestions
 				done
 				input=-1 #Set input to -1
 				while ! [ "$input" -le "$i" -a "$input" -ge 0 ] 2>/dev/null; do
 					#Asking user to select example
-					if ! input="$(xmplRead 'Please select example number:' 0 0 $i)";then
-						return 1
-					fi
+					echo "Please select example number:" >&2
+					history -cr /tmp/xmplSuggestions
+					read -e -i "0" input
+					input=$(echo $input | awk '{print $1;}')
+					history -r ~/.bash_history
+					
 				done
 				
 				input=$((input-1)) #Real input = User input - 1
@@ -1139,16 +1184,33 @@ function xmplEditor {
 			while : ;do
 			response2=NO
 				while [[ ! $response2 =~ ^(yes|y) ]]; do
-					echo -e "Enter command with input variable structure {:variable name:}" >&2
+					echo -e "Enter command with input variable structure {:normal input:} or {::list input::}" >&2
 					if [[ $(echo "$data" | wc -l) == "1" ]] && [[ "$XMPL_MODE_EDIT" != "2" ]];then
 						read -e -i "$data" data
 					else
+
+					
 						read -p "This will open multiline editor! OK?" >&2
-						echo "$data" >  ${XMPL_HOME}/.xmpl/edit.tmp
-						editor ${XMPL_HOME}/.xmpl/edit.tmp
-						cat ${XMPL_HOME}/.xmpl/edit.tmp >&2
-						data=$(cat ${XMPL_HOME}/.xmpl/edit.tmp)
-						rm ${XMPL_HOME}/.xmpl/edit.tmp
+						echo "$data" > /tmp/xmpl_tmp_example
+						
+						if [ ! -z $XMPL_DEFAULT_EDITOR ];then
+							$XMPL_DEFAULT_EDITOR /tmp/xmpl_tmp_example
+						elif type -ta editor; then
+							editor /tmp/xmpl_tmp_example
+						elif ! [ -z $EDITOR ];then
+							$EDITOR /tmp/xmpl_tmp_example
+						else
+							while [ -z $(type -ta $XMPL_DEFAULT_EDITOR) ]; do
+								echo -e "\e[33mPlease enter the default text editor for the Xmpl tool:\e[39m" >&2
+								read XMPL_DEFAULT_EDITOR
+							done
+							editConfig "XMPL_DEFAULT_EDITOR" $XMPL_DEFAULT_EDITOR ${XMPL_HOME}/.xmpl/xmpl.conf
+							$XMPL_DEFAULT_EDITOR /tmp/xmpl_tmp_example
+						fi
+						
+						cat /tmp/xmpl_tmp_example >&2
+						data=$(cat /tmp/xmpl_tmp_example)
+						rm /tmp/xmpl_tmp_example
 					fi
 					echo -e "Is this command correct? [y/N]" >&2
 					read response2
@@ -1223,92 +1285,6 @@ function intersectionGrep {
 	echo "$first"
 }
 
-
-function xmplRead {
-
-	local IFS final input tmp message default min max
-
-	message=$1
-	default=$2
-	min=$3
-	max=$4
-	
-	echo -e '\e[97m\c' >&2
-	echo -e $message >&2 
-	echo -e '\e[39m\c' >&2
-	if [[ ${default} != ${min} ]];then
-		final=$2
-		echo -e "$final\c" >&2
-	fi
-
-	trap ctrl_c INT
-	IFS=""
-	while read -r -n1 -s input
-	do
-
-		if [[  ${input} == $'\e' ]];then
-			read -rsn1 -t 0.1 tmp
-				if [[ "$tmp" == "[" ]]; then
-					read -rsn1 -t 0.1 tmp
-					case "$tmp" in
-						"B" ) 
-							if [ ! -z $min ];then
-								if [ -z $final ];then
-									final=$((min-1))
-								fi
-								if [ "$final" -eq "$final" >& /dev/null ]; then 
-									echo -e "\033[2K\c" >&2 
-									final=$((final + 1))
-									[ $final -gt $max ] && final=$min
-									echo -e "\r$final\c" >&2
-								fi
-							fi
-						;;
-						"A" ) 
-							if [ ! -z $min ];then
-								if [ -z $final ];then
-									final=$((min-1))
-								fi
-								if [ "$final" -eq "$final" >& /dev/null ]; then 
-									echo -e "\033[2K\c" >&2 
-									final=$((final - 1))
-									[ $final -lt $min ] && final=$max
-									echo -e "\r$final\c" >&2
-								fi
-							fi
-						;;
-					#	"C" )
-					#		echo "Right\n" >&2
-					#	"D" ) 
-					#		echo "Left\n" >&2
-					#	;;
-						* )
-							read -rsn1 -t 0.1 tmp
-						;;
-					esac
-				else
-					echo "" >&2
-					return 1
-				fi
-		
-		elif [ "${input}" == $'\177' ] || [ "${input}" == $'\b' ];then
-			final="${final%?}"
-			echo -e "\r\033[K${final}\c" >&2
-		elif [[ ${input} == "" ]];then
-			echo "$final"
-			echo -e "" >&2
-			return 0
-		else
-			if [ -z ${tmp} ];then
-				final+=$input
-				echo -e "$input\c" >&2
-			else
-				unset tmp
-			fi
-		fi
-	done
-}
-
 function showHelp {
 	echo "	"
 	if [ -f ${XMPL_HOME}/.xmpl/repo.conf ];then
@@ -1323,7 +1299,7 @@ function showHelp {
 		echo -e "	[--remove-repo] [--change-repo] [--save-repo]"
 		echo -e "	[--sync-repo] [--pull-request] \e[1mrepo_alias\e[0m"
 		echo -e "	[--comments] [--raw] [--online] [--full-online] [--last]"
-		echo -e "	[--install] [--update] [--deinstall] [--version] [--help]"
+		echo -e "	[--install] [--update] [--uninstall] [--version] [--help]"
 	else
 		echo "No-install usage:"
 		echo "	"
@@ -1360,7 +1336,7 @@ function showHelp {
     echo "   -I			 --install	Install on local system"
 	if [ -f ${XMPL_HOME}/.xmpl/repo.conf ];then
 		echo "   -U			 --update	Update to latest version"
-		echo "   -D			 --deinstall	Deinstall from local system"
+		echo "   -D			 --uninstall	Uninstall from local system"
 		echo "   "
 		echo "   -n [github_user/repo] --new-repo	Add new private repository"	  
 		echo "   -m [repo_alias]	 --remove-repo	Delete local repository"	  
@@ -1386,7 +1362,9 @@ function showHelp {
 ##################################################################
 # MAIN SCRIPT
 
-version='1.0.6'
+version='1.0.7'
+
+history -a
 
 oIFS=$IFS 	#Saving old IFS
 IFS=$'\n' 	#Delimiter to new line
@@ -1463,7 +1441,7 @@ while getopts $flags flag; do
 		"execute-last" )flag=X;;
 		"install" )		flag=I;;
 		"update" ) 		flag=U;;
-		"deinstall" ) 	flag=D;;
+		"uninstall" ) 	flag=D;;
 		"new-repo" ) 	flag=n;;
 		"remove-repo" )	flag=m;;
 		"change-repo" )	flag=r;;
@@ -1601,8 +1579,8 @@ while getopts $flags flag; do
 		fi
 	;;
 	D )
-		#Deinstall local
-		deinstallLocal
+		#Uninstall local
+		uninstallLocal
 		byebye #?
 		if ! return >& /dev/null; then
 			exit
@@ -1701,6 +1679,7 @@ while getopts $flags flag; do
 
 		XMPL_MODE_QUERY=0
 		XMPL_MODE_EDIT=2
+		
 		if [ ! return >& /dev/null ];then
 			exit
 		fi

@@ -1,6 +1,6 @@
 # xmpl-tool
-### v1.0.6
-xmpl tool is a simple script created for fast searching, fetching, and executing examples of Linux commands from online, or local command repositories.
+### v1.0.7
+Xmpl tool is a simple script created for fast searching, fetching, and executing examples of Linux commands from online, or local command repositories.
 
 The tool uses GitHub as the repository backend, giving the community the ability to update the repository with new commands and usage examples.
 
@@ -22,7 +22,7 @@ sudo bash xmpl.sh -I
         [--new-repo] github_user/repo
         [--remove-repo] [--change-repo] [--save-repo] [--sync-repo] [--pull-request] repo_alias
         [--comments] [--raw] [--online] [--full-online] [--last] 
-	[--install] [--update] [--deinstall] [--version] [--help]
+	[--install] [--update] [--uninstall] [--version] [--help]
 
 
  xmpl                                                      List available packages
@@ -46,7 +46,7 @@ sudo bash xmpl.sh -I
 
        -I                           --install              Install on local system
        -U                           --update               Update to latest version
-       -D                           --deinstall            Deinstall from local system
+       -D                           --uninstall            Uninstall from local system
 
        -n [github_user/repo]        --new-repo             Add new private repository
        -m [repo_alias]              --remove-repo          Delete local repository
