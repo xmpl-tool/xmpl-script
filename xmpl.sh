@@ -677,7 +677,7 @@ function queryExamples {
 }
 
 function listAllPackages {
-trap 'echo "";return 1;byebye;' INT 
+trap 'echo "" >&2;return 1;byebye;' INT 
 		local out names paths urls i n j raw data input
 
 		if [ $XMPL_MODE_ONLINE -ge 1 ];then
