@@ -458,12 +458,62 @@ function syncRepository {
 	cd ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO
 	git add . >&2
 	git remote update >&2
-	
+	if ! git diff @{upstream} --quiet --;then
+
+		changes+="$(git diff @{upstream} --name-only)"
+		fcnt=$(echo "$changes" | wc -l) 
+		echo "$fcnt file/s changed!" >&2
+		echo "$changes" >&2
+		echo -e "Do you want to synchronize '$XMPL_CURRENT_REPO' repository? [Y/n]" >&2
+		read response
+		
+		response=${response,,} # tolower
+		if [[ $response =~ ^(yes|y| ) || -z $response ]]; then
+			git pull >&2
+			if [ $XMPL_USERNAME != 'xmpl-tool' ];then
+				if grep upstream <(git remote -v ) -q; then   
+					git fetch upstream >&2
+					git merge -m "Updates from upstream" upstream/master >&2
+				fi
+				cpackages=$(echo -e "$changes" | awk -F "/" '{print $2}' | uniq | tr "\n" " ")
+				commitMsg="$(echo -e "$fcnt file/s changed (${cpackages%% })\n$changes")"
+				git commit -m "${commitMsg}" >&2
+				while : ;do
+					git push origin master >&2 && break
+						echo -e "Try again? [Y/n]" >&2
+						read response
+						response=${response,,} # tolower
+						if [[ $response =~ ^(no|n) ]]; then
+							break
+						fi
+				done
+			fi
+		fi
+		if [ $XMPL_USERNAME == 'xmpl-tool' ];then
+			editConfig 'XMPL_LAST_REPO_UPDATE' $(date +%F) ~/.xmpl/xmpl.conf
+			XMPL_LAST_REPO_UPDATE=$(date +%F)
+		fi
+		#cd $tpwd
+	fi	
+
 	if git diff @{upstream} --quiet --;then
 		status=$(curl --silent https://api.github.com/repos/xmpl-tool/xmpl-repo/compare/xmpl-tool:master...$XMPL_USERNAME:master --stderr - | jq -r '.status')
-		
-		if [ "$status" != "behind" ];then
+		#echo $status >&2
+				
+		if [ "$status" == "identical" -o "$status" == "ahead" ]; then
+			if [ $XMPL_USERNAME == 'xmpl-tool' ];then
+				editConfig 'XMPL_LAST_REPO_UPDATE' $(date +%F) ~/.xmpl/xmpl.conf
+				XMPL_LAST_REPO_UPDATE=$(date +%F)
+			fi
+			echo -e '\e[33mRepository up to date!\e[39m' >&2
+			if [ "$status" == "ahead" ];then
+				echo -e "\e[33mUse 'xmpl -P $XMPL_CURRENT_REPO' to share private changes!\e[39m" >&2
+			fi
 			
+			cd $tpwd
+			return
+		elif [ "$status" == "behind" ];then
+
 			if [ $XMPL_USERNAME == 'xmpl-tool' ];then
 				echo -e "Do you want to synchronize '$XMPL_CURRENT_REPO' repository? [Y/n]" >&2
 				read response
@@ -482,6 +532,7 @@ function syncRepository {
 			cd $tpwd
 			return
 		else
+
 			echo -e "Do you want to synchronize '$XMPL_CURRENT_REPO' repository? [Y/n]" >&2
 			read response
 
@@ -491,7 +542,7 @@ function syncRepository {
 				if grep upstream <(git remote -v ) -q; then   
 					#if [ $XMPL_USERNAME != 'xmpl-tool' ];then
 						git fetch upstream >&2
-						git merge upstream/master >&2
+						git merge -m "Updates from upstream" upstream/master >&2
 					#fi
 				fi
 			fi
@@ -505,42 +556,6 @@ function syncRepository {
 		fi	
 	fi
 
-
-	changes+="$(git diff @{upstream} --name-only)"
-	fcnt=$(echo "$changes" | wc -l) 
-	echo "$fcnt file/s changed!" >&2
-	echo "$changes" >&2
-	echo -e "Do you want to synchronize '$XMPL_CURRENT_REPO' repository? [Y/n]" >&2
-	read response
-
-	response=${response,,} # tolower
-	if [[ $response =~ ^(yes|y| ) || -z $response ]]; then
-		git pull >&2
-		if [ $XMPL_USERNAME != 'xmpl-tool' ];then
-			if grep upstream <(git remote -v ) -q; then   
-				git fetch upstream >&2
-				git merge upstream/master >&2
-			fi
-			cpackages=$(echo -e "$changes" | awk -F "/" '{print $2}' | uniq | tr "\n" " ")
-			commitMsg="$(echo -e "$fcnt file/s changed (${cpackages%% })\n$changes")"
-			git commit -m "${commitMsg}" >&2
-			while : ;do
-				git push origin master >&2 && break
-					echo -e "Try again? [Y/n]" >&2
-					read response
-					response=${response,,} # tolower
-					if [[ $response =~ ^(no|n) ]]; then
-						break
-					fi
-			done
-		fi
-	fi
-	if [ $XMPL_USERNAME == 'xmpl-tool' ];then
-		editConfig 'XMPL_LAST_REPO_UPDATE' $(date +%F) ~/.xmpl/xmpl.conf
-		XMPL_LAST_REPO_UPDATE=$(date +%F)
-	fi
-	cd $tpwd
-	
 }
 
 function pullRepository {
