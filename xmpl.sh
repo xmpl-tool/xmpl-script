@@ -2,7 +2,7 @@
 
 # xmpl-tool v1.0.7
 # Author: Ivan Krpan
-# Date: 28.02.2018
+# Date: 06.03.2018
 
 ##################################################################
 # EXIT FUNCTIONS
@@ -21,6 +21,7 @@ function byebye {
 	
 	trap - INT
 	history -r ~/.bash_history
+	rm /tmp/xmplSuggestions 2>/dev/null
 	echo -e "\e[39m\c" >&2
 }
 
@@ -661,7 +662,7 @@ function queryExamples {
 }
 
 function listAllPackages {
-trap 'return 1;byebye' INT
+trap 'echo "";return 1;byebye;' INT 
 		local out names paths urls i n j raw data input
 
 		if [ $XMPL_MODE_ONLINE -ge 1 ];then
@@ -695,11 +696,11 @@ trap 'return 1;byebye' INT
 			urls+=($(echo "$out" ))
 		fi
 		i=0
-		rm /tmp/xmplSuggestions
+		rm /tmp/xmplSuggestions 2>/dev/null
 		for n in ${names[@]}; do #For each title
 			
 			echo -e "\e[96m\c" >&2 #Color cyan
-				j=$(( $i + 1 ))
+				j=$((i+1))
 				echo -e "$j ${paths[$i]}  \c" >&2  #Print package name to stdout
 				echo "$j ${paths[$i]}" >> /tmp/xmplSuggestions
 
@@ -714,7 +715,7 @@ trap 'return 1;byebye' INT
 			fi
 			echo "$data" | head -1 >&2   #Print output to stdout
 			echo -e "\e[39m\c" >&2 #Color default
-			i=$((i+1)) #Counter + 1
+			i=$((i+1))  #Counter + 1
 		done
 					
 				input=0 #Set input to 0	
@@ -731,7 +732,7 @@ trap 'return 1;byebye' INT
 						#if not find id by name
 					   	input=($(printf '%s\n' "${paths[@]}" | grep -n '^'$input'$' | cut -f1 -d:))
 					fi
-				done
+				done 
 				input=$((input-1)) # input = userinput - 1
 				#select package
 				selectMode ${names[$input]}
@@ -739,7 +740,7 @@ trap 'return 1;byebye' INT
 }
 
 function selectMode {
-trap 'return 1;byebye' INT
+trap 'echo "" >&2;return 1;byebye;' INT
 
 		local package query names paths urls out i n input 
 
@@ -758,7 +759,7 @@ trap 'return 1;byebye' INT
 			urls+=($(echo "$out" )) #Parse urls in array
 		fi
 		
-		rm /tmp/xmplSuggestions
+		rm /tmp/xmplSuggestions 2>/dev/null
 		i=0	#Set counter to 0
 		if [ "${#names[@]}" -gt 1 ]; then #For more then 1 example result
 
@@ -967,7 +968,7 @@ function executeMode {
 # EDITOR FUNCTIONS
 
 function deleteExample {
-trap 'return 1;byebye' INT
+trap 'echo "" >&2;return 1;byebye;' INT
 
 	local input package newRepoAlias XMPL_USERNAME response names paths urls out
 		
@@ -1000,7 +1001,7 @@ trap 'return 1;byebye' INT
 			names+=($(echo "$out" | sed -e 's/.*\///' -e 's/.xmpl//')) #Parse names in array
 			paths+=($(dirname $out 2>/dev/null | sed 's/.*\///')) #Parse paths in array
 			urls+=($(echo "$out" )) #Parse urls in array
-			rm /tmp/xmplSuggestions		
+			rm /tmp/xmplSuggestions 2>/dev/null	
 			if [ "${#names[@]}" -ge 1 ]; then #For 1 or more example result
 			echo "Select the example you want to delete!" >&2
 				i=0	#Set counter to 0
@@ -1054,7 +1055,7 @@ trap 'return 1;byebye' INT
 
 
 function xmplEditor {
-trap 'return 1;byebye' INT
+trap 'echo "" >&2;return 1;byebye;' INT
 
 	local input data tags title package newRepoAlias XMPL_USERNAME response response2 names paths urls outFile out
 
