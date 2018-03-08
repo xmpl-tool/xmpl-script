@@ -2,7 +2,7 @@
 
 # xmpl-tool v1.0.7
 # Author: Ivan Krpan
-# Date: 06.03.2018
+# Date: 08.03.2018
 
 ##################################################################
 # EXIT FUNCTIONS
@@ -859,7 +859,7 @@ function executeMode {
 				fi	
 				
 				if [[ $XMPL_MODE_INPUT == 1 ]]; then #User puts arguments
-					arguments=$(echo $XMPL_PRE_RESULT | grep -Po '{:.*:}') #Get all arguments from example
+					arguments=$(echo $XMPL_PRE_RESULT | grep -Po '{:[^{}]*:}') #Get all arguments from example
 					
 					if [[ ${arguments} != '' ]];then #If arguments exists
 						echo -e "\e[93m\c" >&2 #Color yellow
