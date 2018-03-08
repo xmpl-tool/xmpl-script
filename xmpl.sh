@@ -842,10 +842,9 @@ function executeMode {
 			
 				if [ $XMPL_MODE_ONLINE -ge 1 ];then
 					raw=$(echo -e $eurl | sed -e 's/https:\/\/github.com/https:\/\/raw.githubusercontent.com/; s/\/blob\//\//;') #Replacing html url with raw url
-					
-						XMPL_PRE_RESULT=$(curl --silent $raw --stderr - ) #Get example raw result 
-
+					XMPL_PRE_RESULT=$(curl --silent $raw --stderr - ) #Get example raw result 
 				else
+					
 					raw=$eurl
 					XMPL_PRE_RESULT=$(cat $raw)
 				fi
@@ -1545,7 +1544,7 @@ while getopts $flags flag; do
 		XMPL_MODE_INPUT=1
 		XMPL_MODE_EXECUTE=1
 		XMPL_MODE_NULL=1
-		#getting inputs
+		#get inputs
 		until [[ $(eval "echo \${$OPTIND}") =~ ^-.* ]] || [[ -z $(eval "echo \${$OPTIND}") ]]; do
 				XMPL_INPUTS+=($(eval "echo \${$OPTIND}"))
 				shift
@@ -1798,6 +1797,10 @@ if [ $XMPL_MODE_NULL != 1 -a $XMPL_MODE_EDIT -ge 1 ];then
 fi
 #if mode history
 if [ $XMPL_MODE_HISTORY == 1 ];then
+	#check if online source
+	if [[ $XMPL_LAST_URL == https* ]];then
+		XMPL_MODE_ONLINE=1
+	fi
 	#execute last example
 	executeMode $XMPL_LAST_EXAMPLE $XMPL_LAST_PATH $XMPL_LAST_URL
 fi
