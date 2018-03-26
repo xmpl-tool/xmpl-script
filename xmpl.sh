@@ -2,7 +2,7 @@
 
 # xmpl-tool v1.0.7
 # Author: Ivan Krpan
-# Date: 08.03.2018
+# Date: 26.03.2018
 
 ##################################################################
 # EXIT FUNCTIONS
@@ -19,9 +19,10 @@ function byebye {
 	
 	export XMPL_LAST_EXAMPLE XMPL_LAST_PATH XMPL_LAST_URL
 	
-	trap - INT
 	history -r ~/.bash_history
 	rm /tmp/xmplSuggestions 2>/dev/null
+	
+	trap - SIGINT
 	echo -e "\e[39m\c" >&2
 }
 
@@ -677,9 +678,10 @@ function queryExamples {
 }
 
 function listAllPackages {
-trap 'echo "" >&2;return 1;byebye;' INT 
+		
 		local out names paths urls i n j raw data input
-
+		trap 'echo "" >&2;return 1;byebye;' SIGINT 
+		
 		if [ $XMPL_MODE_ONLINE -ge 1 ];then
 			out=$(curl --silent https://api.github.com/search/code?q=path:commands+extension:desc+repo:${XMPL_REPO} --stderr - | jq '.items[] | {name, path, html_url}') #Get results from API
 			names+=($(echo "$out" | jq -r '.name' | sort | sed -E 's/.xmpl|.desc//')) #Parse names in array
@@ -738,7 +740,7 @@ trap 'echo "" >&2;return 1;byebye;' INT
 					#Reading user input
 					echo "Please select package:" >&2
 					history -cr /tmp/xmplSuggestions
-					read -e input
+					input=$(read -e input && echo $input)
 					input=$(echo $input | awk '{print $1;}')
 					history -r ~/.bash_history
 				
@@ -755,10 +757,10 @@ trap 'echo "" >&2;return 1;byebye;' INT
 }
 
 function selectMode {
-trap 'echo "" >&2;return 1;byebye;' INT
 
 		local package query names paths urls out i n input 
-
+		trap 'echo "" >&2;return 1;byebye;' SIGINT
+		
 		package=$1
 		query=$2
 		
@@ -794,7 +796,7 @@ trap 'echo "" >&2;return 1;byebye;' INT
 			
 				echo "Please select example number:" >&2
 				history -cr /tmp/xmplSuggestions
-				read -e input
+				input=$(read -e input && echo $input)
 				input=$(echo $input | awk '{print $1;}')
 				history -r ~/.bash_history
 					
@@ -891,7 +893,7 @@ function executeMode {
 										fi		
 									
 								else
-									trap 'return' INT #return to ctrl+c for exiting read function
+									trap 'return' SIGINT #return to ctrl+c for exiting read function
 									echo -e "\e[36m$arg:\e[39m" | sed -e 's/{:://' -e 's/::}//' -e 's/{://' -e 's/:}//'  >&2 #Asking user to input value
 																		
 									if [ "$XMPL_LAST_URL" == "$eurl" ];then
@@ -912,7 +914,7 @@ function executeMode {
 										read -e parm #read new input
 									fi
 									
-									trap - INT
+									trap - SIGINT
 									parm=$(echo "${parm%% }") #remove last whitespace from user input (because autocomplete end with whitespace)
 									if [ ${parm:0:1} == "\"" ] && [ ${parm: -1} == "\"" ];then #if value is commented with double quote
 										#remove double quote
@@ -957,9 +959,9 @@ function executeMode {
 						XMPL_RESULT=$(eval "echo \"$XMPL_RESULT\"" | sed '/^[[:blank:]]*#/d;s/#.*//') #Remove comments and execute pre-evaled command
 						
 						echo 2>/dev/null "$XMPL_RESULT" 1>&3 #Print results to stdout2 only
-						trap 'return' INT
+						trap 'return' SIGINT
 						eval "$XMPL_RESULT"
-						trap - INT
+						trap - SIGINT
 						if [ $? -eq 0 ]; then
 							echo -e "\e[35mEXECUTED\e[39m" >&2 #Command executed
 						else
@@ -982,10 +984,10 @@ function executeMode {
 # EDITOR FUNCTIONS
 
 function deleteExample {
-trap 'echo "" >&2;return 1;byebye;' INT
 
 	local input package newRepoAlias XMPL_USERNAME response names paths urls out
-		
+	trap 'echo "" >&2;return 1;byebye;' SIGINT
+	
 	package=$1
 	newRepoAlias=$2
 
@@ -1004,7 +1006,7 @@ trap 'echo "" >&2;return 1;byebye;' INT
 
 	while [ -z ${package} ];do
 		echo -e "Enter package name:" >&2
-		read -e package
+		package=$(read -e package && $package)
 	done
 	if ! [ -f ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package/$package.desc >& /dev/null ] ;then
 		echo "Package '$package' does not exists!" >&2
@@ -1029,7 +1031,7 @@ trap 'echo "" >&2;return 1;byebye;' INT
 						#Asking user to select example
 						echo "Please select example number:" >&2
 						history -cr /tmp/xmplSuggestions
-						read -e input
+						input=$(read -e input && echo $input)
 						input=$(echo $input | awk '{print $1;}')
 						history -r ~/.bash_history
 					done
@@ -1039,7 +1041,7 @@ trap 'echo "" >&2;return 1;byebye;' INT
 					cat ${urls[$input]}
 					echo -e "\e[39m\c" >&2 #Color default
 					echo "Delete example '${names[$input]}'? [y/N]" >&2
-					read response
+					response=$(read response && echo $response)
 
 					response=${response,,} # tolower
 						if [[ $response =~ ^(yes|y) ]]; then
@@ -1052,7 +1054,7 @@ trap 'echo "" >&2;return 1;byebye;' INT
 					
 			else
 				echo -e "No examples for package '$package'!\nDelete this package? [y/N]" >&2
-				read response
+				response=$(read response && echo $response)
 
 				response=${response,,} # tolower
 					if [[ $response =~ ^(yes|y) ]]; then
@@ -1069,10 +1071,10 @@ trap 'echo "" >&2;return 1;byebye;' INT
 
 
 function xmplEditor {
-trap 'echo "" >&2;return 1;byebye;' INT
 
 	local input data tags title package newRepoAlias XMPL_USERNAME response response2 names paths urls outFile out
-
+	trap 'echo "" >&2;return 1;byebye;' SIGINT
+	
 	package=$1
 	newRepoAlias=$2
 
@@ -1091,14 +1093,14 @@ trap 'echo "" >&2;return 1;byebye;' INT
 
 	while [ -z ${package} ];do
 		echo -e "Enter package name:" >&2
-		read -e package
+		package=$(read -e package && echo $package)
 		package=$(echo "$package" | awk '{print $1;}')
 	done
 	
 		if [[ ! -z ${package} ]];then
 			if ! [ -f ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO/commands/$package/$package.desc >& /dev/null ] ;then
 				echo -e "Create new package '${package}'? [Y/n]" >&2
-				read response
+				response=$(read response && echo $response)
 
 				response=${response,,} # tolower
 					if [[ $response =~ ^(yes|y| ) ]] || [[ -z ${response} ]]; then
@@ -1109,9 +1111,9 @@ trap 'echo "" >&2;return 1;byebye;' INT
 						while ! [[ $response2 =~ ^(yes|y) ]] 2>/dev/null; do
 							input=0 #Set input to 0	
 							echo -e "Please enter description for package '$package':"
-							read -e input
+							input=$(read -e input && echo $input)
 							echo -e "Is this description correct? [y/N]"
-							read response2
+							response2=$(read response2 && echo $response2)
 
 							response2=${response2,,} # tolower
 						done
@@ -1145,7 +1147,7 @@ trap 'echo "" >&2;return 1;byebye;' INT
 					#Asking user to select example
 					echo "Please select example number:" >&2
 					history -cr /tmp/xmplSuggestions
-					read -e -i "0" input
+					input=$(read -e -i "0" input && echo $input)
 					input=$(echo $input | awk '{print $1;}')
 					history -r ~/.bash_history
 					
@@ -1168,10 +1170,9 @@ trap 'echo "" >&2;return 1;byebye;' INT
 				
 					while [[ ! $response2 =~ ^(yes|y) ]]; do
 						echo -e "Enter example title:" >&2
-						read -e -i "$title" title
+						title=$(read -e -i "$title" title && echo $title)
 						echo -e "Is this title correct? [y/N]" >&2
-						read response2
-
+						response2=$(read response2 && echo $response2)
 						response2=${response2,,} # tolower
 					done
 					[ ! -z ${title} ] && break
@@ -1185,11 +1186,11 @@ trap 'echo "" >&2;return 1;byebye;' INT
 				while [[ ! $response2 =~ ^(yes|y) ]]; do
 					echo -e "Enter command with input variable structure {:normal input:} or {::list input::}" >&2
 					if [[ $(echo "$data" | wc -l) == "1" ]] && [[ "$XMPL_MODE_EDIT" != "2" ]];then
-						read -e -i "$data" data
+						data=$(read -e -i "$data" data && echo $data)
 					else
 
 					
-						read -p "This will open multiline editor! OK?" >&2
+						$(read -p "This will open multiline editor! OK?" >&2)
 						echo "$data" > /tmp/xmpl_tmp_example
 						
 						if [ ! -z $XMPL_DEFAULT_EDITOR ];then
@@ -1201,7 +1202,7 @@ trap 'echo "" >&2;return 1;byebye;' INT
 						else
 							while [ -z $(type -ta $XMPL_DEFAULT_EDITOR) ]; do
 								echo -e "\e[33mPlease enter the default text editor for the Xmpl tool:\e[39m" >&2
-								read XMPL_DEFAULT_EDITOR
+								XMPL_DEFAULT_EDITOR=$(read XMPL_DEFAULT_EDITOR && echo $XMPL_DEFAULT_EDITOR)
 							done
 							editConfig "XMPL_DEFAULT_EDITOR" $XMPL_DEFAULT_EDITOR ${XMPL_HOME}/.xmpl/xmpl.conf
 							$XMPL_DEFAULT_EDITOR /tmp/xmpl_tmp_example
@@ -1212,8 +1213,7 @@ trap 'echo "" >&2;return 1;byebye;' INT
 						rm /tmp/xmpl_tmp_example
 					fi
 					echo -e "Is this command correct? [y/N]" >&2
-					read response2
-
+					response2=$(read response2 && echo $response2)
 					response2=${response2,,} # tolower
 				done
 				[[ -z "${data}" ]] || break
@@ -1223,10 +1223,9 @@ trap 'echo "" >&2;return 1;byebye;' INT
 			response2=NO
 				while [[ ! $response2 =~ ^(yes|y) ]] 2>/dev/null; do
 					echo -e "Edit search tags:" >&2
-					read -e -i "$tags" tags		
+					tags=$(read -e -i "$tags" tags && echo $tags)		
 					echo -e "Is this correct? [y/N]" >&2
-					read response2
-
+					response2=$(read response2 && echo $response2)
 					response2=${response2,,} # tolower
 				
 				done
