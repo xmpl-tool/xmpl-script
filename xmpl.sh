@@ -2,7 +2,7 @@
 
 # xmpl-tool v1.0.7
 # Author: Ivan Krpan
-# Date: 26.03.2018
+# Date: 14.04.2018
 
 ##################################################################
 # EXIT FUNCTIONS
@@ -898,20 +898,20 @@ function executeMode {
 																		
 									if [ "$XMPL_LAST_URL" == "$eurl" ];then
 										if [[ ! ${old_inputs[$a]: -1} == " " ]]; then
-											read -e -i "${old_inputs[$a]}" parm #read input with last input suggestion
+											parm=$(read -e -i "${old_inputs[$a]}" parm) #read input with last input suggestion
 										else
 											if [[ ! "$old_inputs[$a]" =~ "'" ]]; then
-												read -e -i "'${old_inputs[$a]}'" parm #read input with last input suggestion
+												parm=$(read -e -i "'${old_inputs[$a]}'" parm) #read input with last input suggestion
 											else
 												if [[ ! "$old_inputs[$a]" =~ "\"" ]]; then
-													read -e -i "\"${old_inputs[$a]}\"" parm #read input with last input suggestion
+													parm=$(read -e -i "\"${old_inputs[$a]}\"" parm) #read input with last input suggestion
 												else
-													read -e -i "${old_inputs[$a]}" parm #read input with last input suggestion
+													parm=$(read -e -i "${old_inputs[$a]}" parm) #read input with last input suggestion
 												fi
 											fi
 										fi
 									else
-										read -e parm #read new input
+										parm=$(read -e parm) #read new input
 									fi
 									
 									trap - SIGINT
