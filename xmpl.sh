@@ -2,7 +2,7 @@
 
 # xmpl-tool v1.0.7
 # Author: Ivan Krpan
-# Date: 14.04.2018
+# Date: 18.04.2018
 
 ##################################################################
 # EXIT FUNCTIONS
@@ -898,29 +898,29 @@ function executeMode {
 																		
 									if [ "$XMPL_LAST_URL" == "$eurl" ];then
 										if [[ ! ${old_inputs[$a]: -1} == " " ]]; then
-											parm=$(read -e -i "${old_inputs[$a]}" parm) #read input with last input suggestion
+											parm=$(read -e -i "${old_inputs[$a]}" parm && echo $parm) #read input with last input suggestion
 										else
 											if [[ ! "$old_inputs[$a]" =~ "'" ]]; then
-												parm=$(read -e -i "'${old_inputs[$a]}'" parm) #read input with last input suggestion
+												parm=$(read -e -i "'${old_inputs[$a]}'" parm && echo $parm) #read input with last input suggestion
 											else
 												if [[ ! "$old_inputs[$a]" =~ "\"" ]]; then
-													parm=$(read -e -i "\"${old_inputs[$a]}\"" parm) #read input with last input suggestion
+													parm=$(read -e -i "\"${old_inputs[$a]}\"" parm && echo $parm) #read input with last input suggestion
 												else
-													parm=$(read -e -i "${old_inputs[$a]}" parm) #read input with last input suggestion
+													parm=$(read -e -i "${old_inputs[$a]}" parm && echo $parm) #read input with last input suggestion
 												fi
 											fi
 										fi
 									else
-										parm=$(read -e parm) #read new input
+										parm=$(read -e parm && echo $parm) #read new input
 									fi
-									
+
 									trap - SIGINT
 									parm=$(echo "${parm%% }") #remove last whitespace from user input (because autocomplete end with whitespace)
-									if [ ${parm:0:1} == "\"" ] && [ ${parm: -1} == "\"" ];then #if value is commented with double quote
+									if [[ ${parm:0:1} == "\"" ]] && [[ ${parm: -1} == "\"" ]];then #if value is commented with double quote
 										#remove double quote
 										parm=$(echo "${parm//\"/}")
 										parm=$(echo "${parm%%\"}")
-									elif [ ${parm:0:1} == "'" ] && [ ${parm: -1} == "'" ];then #if value is commented with single quote
+									elif [[ ${parm:0:1} == "'" ]] && [[ ${parm: -1} == "'" ]];then #if value is commented with single quote
 										#remove single quote
 										parm=$(echo "${parm//\'/}")
 										parm=$(echo "${parm%%\'}")
