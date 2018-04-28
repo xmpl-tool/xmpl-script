@@ -1,14 +1,16 @@
 #!/bin/bash
 
-# xmpl-tool v1.0.7
+# xmpl-tool v1.0.8
 # Author: Ivan Krpan
-# Date: 18.04.2018
+# Date: 27.04.2018
 
 ##################################################################
 # EXIT FUNCTIONS
 function byebye {
 
 	IFS=$oIFS
+	set +f #enable shell wildcard character expansion
+	
 	unset -f installSourced
 	unset -f editConfig
 	unset -f installPrivateRepo
@@ -447,13 +449,17 @@ function delLocalRepository {
 
 function syncRepository {
 
-	local changes tpwd status XMPL_USERNAME response fcnt cpackages commitMsg
+	local changes tpwd status XMPL_USERNAME response fcnt cpackages commitMsg pullMsg repoAlias
 
 	tpwd=$PWD
-	if ! getRepository $1;then
-		return
-	fi
+	pullMsg=$1
+	repoAlias=$2	
 
+	if ! getRepository $repoAlias;then
+		return
+	fi	
+	
+	
 	XMPL_REPO=$(grep -oP "$XMPL_CURRENT_REPO *= *\K.*" ${XMPL_HOME}/.xmpl/repo.conf)
 	XMPL_USERNAME=$(dirname $XMPL_REPO)
 	cd ${XMPL_HOME}/.xmpl/repos/$XMPL_REPO
@@ -507,7 +513,7 @@ function syncRepository {
 				XMPL_LAST_REPO_UPDATE=$(date +%F)
 			fi
 			echo -e '\e[33mRepository up to date!\e[39m' >&2
-			if [ "$status" == "ahead" ];then
+			if [ "$status" == "ahead" ] && [ "$pullMsg" == "1" ];then
 				echo -e "\e[33mUse 'xmpl -P $XMPL_CURRENT_REPO' to share private changes!\e[39m" >&2
 			fi
 			
@@ -652,10 +658,21 @@ function queryExamples {
 			if [ -d ${XMPL_HOME}/.xmpl/repos/$XMPL_USERNAME ]; then
 				XMPL_MODE_ONLINE=0
 			else
-				XMPL_MODE_ONLINE=1
+				if timeout 2 ping -c 1 api.github.com >/dev/null 2>&1; then
+					XMPL_MODE_ONLINE=1
+				else
+					echo -e "\e[33mNo Internet connection!\e[39m" >&2
+					return
+				fi
 			fi
 		else
-			echo -e "\e[33mForcing online mode!\e[39m" >&2
+				if timeout 2 ping -c 1 api.github.com >/dev/null 2>&1; then
+					echo -e "\e[33mOnline mode!\e[39m" >&2
+				else
+					echo -e "\e[33mNo Internet connection!\e[39m" >&2
+					return
+				fi
+			
 		fi
 	fi	
 	
@@ -675,6 +692,7 @@ function queryExamples {
 			selectMode $package $query 	
 		fi
 	fi
+
 }
 
 function listAllPackages {
@@ -876,7 +894,7 @@ function executeMode {
 									#use existing user inputs
 									parm=${XMPL_INPUTS[$a]}
 									#Review the existing user input arguments
-									echo -e "\e[36m$arg:\e[39m" | sed -e 's/{://' -e 's/:}//' >&2 
+									echo -e "\e[36m$arg:\e[39m" | sed -e 's/{:://' -e 's/::}//' -e 's/{://' -e 's/:}//' >&2 
 									
 									if [[ ! ${parm: -1} == " " ]]; then
 											echo -e $parm >&2
@@ -960,13 +978,16 @@ function executeMode {
 						
 						echo 2>/dev/null "$XMPL_RESULT" 1>&3 #Print results to stdout2 only
 						trap 'return' SIGINT
-						eval "$XMPL_RESULT"
+						
+						eval "$XMPL_RESULT" 
+						
 						trap - SIGINT
 						if [ $? -eq 0 ]; then
 							echo -e "\e[35mEXECUTED\e[39m" >&2 #Command executed
 						else
 							echo -e "\e[31mERROR\e[39m" >&2 #Execution failed
 						fi
+						
 					fi
 					
 				else
@@ -1332,9 +1353,11 @@ function showHelp {
 	echo "   -X [<arguments>]	 --execute-last	Execute last selected example"
 	echo "  "
     echo "   -I			 --install	Install on local system"
-	if [ -f ${XMPL_HOME}/.xmpl/repo.conf ];then
+	if [ -f /usr/local/bin/xmpl ];then
 		echo "   -U			 --update	Update to latest version"
 		echo "   -D			 --uninstall	Uninstall from local system"
+	fi
+	if [ -f ${XMPL_HOME}/.xmpl/repo.conf ];then
 		echo "   "
 		echo "   -n [github_user/repo] --new-repo	Add new private repository"	  
 		echo "   -m [repo_alias]	 --remove-repo	Delete local repository"	  
@@ -1360,9 +1383,10 @@ function showHelp {
 ##################################################################
 # MAIN SCRIPT
 
-version='1.0.7'
+version='1.0.8'
 
-history -a
+history -a #save current history
+set -f #disable shell wildcard character expansion
 
 oIFS=$IFS 	#Saving old IFS
 IFS=$'\n' 	#Delimiter to new line
@@ -1701,7 +1725,7 @@ while getopts $flags flag; do
 	S )
 		#sync repo
 		repo=$(eval "echo \${$OPTIND}")
-		$(syncRepository $repo)
+		$(syncRepository 1 $repo)
 		XMPL_MODE_NULL=1
 		#byebye #?
 		if [ ! return >& /dev/null ];then
@@ -1711,7 +1735,7 @@ while getopts $flags flag; do
 	P )
 		#pull repo
 		repo=$(eval "echo \${$OPTIND}")
-		$(syncRepository $repo)
+		$(syncRepository 0 $repo)
 		pullRepository $repo
 		XMPL_MODE_NULL=1
 
