@@ -2,7 +2,7 @@
 
 # xmpl-tool v1.0.9
 # Author: Ivan Krpan
-# Date: 2018-05-07
+# Date: 2018-05-08
 
 version='1.0.9'
 ##################################################################
@@ -468,7 +468,6 @@ function syncRepository {
 	git remote update >&2
 	if ! git diff @{upstream} --quiet --;then
 
-		echo "INFO: 1" >&2
 		changes+="$(git diff @{upstream} --name-only)"
 		fcnt=$(echo "$changes" | wc -l) 
 		echo "$fcnt file/s changed!" >&2
@@ -912,15 +911,32 @@ function executeMode {
 						echo -e "\e[39m\c" >&2 #Color default
 					fi
 					a=0
-				
 					for arg in $arguments #For each argument
 					do
 						if [[ ${arg} != '' ]]; then #If argument exists 
 								if [[ ! -z ${XMPL_INPUTS[$a]} ]] ;then
+									
 									#use existing user inputs
 									parm=${XMPL_INPUTS[$a]}
 									#Review the existing user input arguments
 									echo -e "\e[36m$arg:\e[39m" | sed -e 's/{:://' -e 's/::}//' -e 's/{://' -e 's/:}//' >&2 
+												
+									# if [[ -z ${parm} ]];then
+										# XMPL_INPUTS+=( "\"\"" )
+									# else
+										# XMPL_INPUTS+=( ${parm} )
+									# fi
+									
+									if [[ ${#parm} > 1 ]] && [[ ${parm:0:1} == "\"" ]] && [[ ${parm: -1} == "\"" ]];then #if value is commented with double quote
+										#remove double quote
+										parm=$(echo "${parm//\"/}")
+										parm=$(echo "${parm%%\"}")
+									elif [[ ${#parm} > 1 ]] && [[ ${parm:0:1} == "'" ]] && [[ ${parm: -1} == "'" ]];then #if value is commented with single quote
+										#remove single quote
+										parm=$(echo "${parm//\'/}")
+										parm=$(echo "${parm%%\'}")
+									fi
+									
 									
 									if [[ ! ${parm: -1} == " " ]]; then
 											echo -e $parm >&2
@@ -937,39 +953,63 @@ function executeMode {
 										fi		
 									
 								else
+									rm /tmp/xmplSuggestions 2>/dev/null
+									
 									trap 'return' SIGINT #return to ctrl+c for exiting read function
 									echo -e "\e[36m$arg:\e[39m" | sed -e 's/{:://' -e 's/::}//' -e 's/{://' -e 's/:}//'  >&2 #Asking user to input value
 																		
 									if [ "$XMPL_LAST_URL" == "$eurl" ];then
-										if [[ ! ${old_inputs[$a]: -1} == " " ]]; then
-											parm=$(read -e -i "${old_inputs[$a]}" parm && echo $parm) #read input with last input suggestion
+										if [[ ${old_inputs[$a]} == "\"\"" ]] || [[ ${old_inputs[$a]} == "''" ]]; then
+											echo "" > /tmp/xmplSuggestions
+											history -cr /tmp/xmplSuggestions
+											parm=$(read -e parm && echo $parm)
+										elif [[ ! ${old_inputs[$a]: -1} == " " ]]; then
+											echo "${old_inputs[$a]}" > /tmp/xmplSuggestions
+											history -cr /tmp/xmplSuggestions
+											parm=$(read -e  parm && echo $parm) #read input with last input suggestion
 										else
 											if [[ ! "$old_inputs[$a]" =~ "'" ]]; then
-												parm=$(read -e -i "'${old_inputs[$a]}'" parm && echo $parm) #read input with last input suggestion
+												echo "'${old_inputs[$a]}'" > /tmp/xmplSuggestions
+												history -cr /tmp/xmplSuggestions
+												parm=$(read -e parm && echo $parm) #read input with last input suggestion
 											else
-												if [[ ! "$old_inputs[$a]" =~ "\"" ]]; then
-													parm=$(read -e -i "\"${old_inputs[$a]}\"" parm && echo $parm) #read input with last input suggestion
+												if [[ ! "\"$old_inputs[$a]\"" =~ "\"" ]]; then
+													echo "${old_inputs[$a]}" > /tmp/xmplSuggestions
+													history -cr /tmp/xmplSuggestions
+													parm=$(read -e parm && echo $parm) #read input with last input suggestion
 												else
-													parm=$(read -e -i "${old_inputs[$a]}" parm && echo $parm) #read input with last input suggestion
+													echo "${old_inputs[$a]}" > /tmp/xmplSuggestions
+													history -cr /tmp/xmplSuggestions
+													parm=$(read -e parm && echo $parm) #read input with last input suggestion
 												fi
 											fi
 										fi
 									else
+										printf "%s\n" "${old_inputs[@]}" > /tmp/xmplSuggestions
+										history -cr /tmp/xmplSuggestions
 										parm=$(read -e parm && echo $parm) #read new input
 									fi
 
 									trap - SIGINT
 									parm=$(echo "${parm%% }") #remove last whitespace from user input (because autocomplete end with whitespace)
-									if [[ ${parm:0:1} == "\"" ]] && [[ ${parm: -1} == "\"" ]];then #if value is commented with double quote
+									
+									if [[ -z ${parm} ]];then
+										XMPL_INPUTS+=( "\"\"" )
+									else
+										XMPL_INPUTS+=( ${parm} )
+									fi
+									
+									if [[ ${parm} == "''" ]] || [[ ${parm} == "\"\"" ]];then #if value is commented with double quote
+										parm=""
+									elif [[ ${#parm} > 1 ]] && [[ ${parm:0:1} == "\"" ]] && [[ ${parm: -1} == "\"" ]];then #if value is commented with double quote
 										#remove double quote
 										parm=$(echo "${parm//\"/}")
 										parm=$(echo "${parm%%\"}")
-									elif [[ ${parm:0:1} == "'" ]] && [[ ${parm: -1} == "'" ]];then #if value is commented with single quote
+									elif [[ ${#parm} > 1 ]] && [[ ${parm:0:1} == "'" ]] && [[ ${parm: -1} == "'" ]];then #if value is commented with single quote
 										#remove single quote
 										parm=$(echo "${parm//\'/}")
 										parm=$(echo "${parm%%\'}")
 									fi
-									XMPL_INPUTS+=(${parm})
 								fi
 
 								#parms ecape chars 3x
@@ -1560,9 +1600,13 @@ while getopts $flags flag; do
 		#Input mode
 		XMPL_MODE_INPUT=1
 		#getting inputs
-		until [[ $(eval "echo \${$OPTIND}") =~ ^-.* ]] || [[ -z $(eval "echo \${$OPTIND}") ]]; do
+		until [[ $(eval "echo \${$OPTIND}") =~ ^-.* ]] || [[ -z $(eval "echo \${${OPTIND}+x}") ]]; do
+			if [[ -z $(eval "echo \${$OPTIND}") ]];then
+				XMPL_INPUTS+=("''")
+			else
 				XMPL_INPUTS+=($(eval "echo \${$OPTIND}"))
-				shift
+			fi
+			shift
 		done
 	;;
 	x )
@@ -1570,9 +1614,13 @@ while getopts $flags flag; do
 		XMPL_MODE_INPUT=1
 		XMPL_MODE_EXECUTE=1
 		#getting inputs
-		until [[ $(eval "echo \${$OPTIND}") =~ ^-.* ]] || [[ -z $(eval "echo \${$OPTIND}") ]]; do
+		until [[ $(eval "echo \${$OPTIND}") =~ ^-.* ]] || [[ -z $(eval "echo \${${OPTIND}+x}") ]]; do
+			if [[ -z $(eval "echo \${$OPTIND}") ]];then
+				XMPL_INPUTS+=("''")
+			else
 				XMPL_INPUTS+=($(eval "echo \${$OPTIND}"))
-				shift
+			fi
+			shift
 		done
 		
 		
@@ -1583,6 +1631,7 @@ while getopts $flags flag; do
 			echo -e "\e[33mLast command not found for user `whoami`!\e[39m" >&2
 		else
 			XMPL_MODE_HISTORY=1
+
 		fi
 		XMPL_MODE_NULL=1
 	;;
@@ -1592,14 +1641,15 @@ while getopts $flags flag; do
 		XMPL_MODE_EXECUTE=1
 		XMPL_MODE_NULL=1
 		#get inputs
-		until [[ $(eval "echo \${$OPTIND}") =~ ^-.* ]] || [[ -z $(eval "echo \${$OPTIND}") ]]; do
+		until [[ $(eval "echo \${$OPTIND}") =~ ^-.* ]] || [[ -z $(eval "echo \${${OPTIND}+x}") ]]; do
+			if [[ -z $(eval "echo \${$OPTIND}") ]];then
+				XMPL_INPUTS+=("''")
+			else
 				XMPL_INPUTS+=($(eval "echo \${$OPTIND}"))
-				shift
+			fi
+			shift
 		done
-		#if no inputs, use last inputs
-		if [ -z $XMPL_INPUTS ];then
-			XMPL_INPUTS=(${old_inputs[@]})
-		fi
+
 		#check for last command
 		if [ -z $XMPL_LAST_PATH ];then
 			echo -e "\e[33mLast command not found for user `whoami`!\e[39m" >&2
