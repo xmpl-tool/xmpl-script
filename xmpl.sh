@@ -2,7 +2,7 @@
 
 # xmpl-tool v1.0.9
 # Author: Ivan Krpan
-# Date: 2018-05-08
+# Date: 2018-06-22
 
 version='1.0.9'
 ##################################################################
@@ -726,10 +726,10 @@ function listAllPackages {
 		trap 'echo "" >&2;return 1;byebye;' SIGINT 
 		
 		if [ $XMPL_MODE_ONLINE -ge 1 ];then
-			out=$(curl --silent https://api.github.com/search/code?q=path:commands+extension:desc+repo:${XMPL_REPO} --stderr - | jq '.items[] | {name, path, html_url}') #Get results from API
-			names+=($(echo "$out" | jq -r '.name' | sort | sed -E 's/.xmpl|.desc//')) #Parse names in array
-			paths+=($(echo "$out" | jq -r '.path' | sort | awk -F "/" '{print $2}')) #Parse paths in array
-			urls+=($(echo "$out" | jq -r '.html_url' | sort -t '/' -k 9,9 )) #Parse urls in array
+			out=$(curl --silent https://api.github.com/search/code?q=path:commands+extension:desc+repo:${XMPL_REPO} --stderr - | jq '[.items[] | {name, path, html_url}] | sort_by(.path) | .[]') #Get results from API
+			names+=($(echo "$out" | jq -r '.name' | sed -E 's/.xmpl|.desc//')) #Parse names in array
+			paths+=($(echo "$out" | jq -r '.path' | awk -F "/" '{print $2}')) #Parse paths in array
+			urls+=($(echo "$out" | jq -r '.html_url' )) #Parse urls in array
 		else
 
 			#Auto sync..
@@ -808,10 +808,10 @@ function selectMode {
 		query=$2
 		
 		if [ $XMPL_MODE_ONLINE -ge 1 ];then
-			out=$(curl --silent https://api.github.com/search/code?q=${query}+path:commands/${package}+extension:xmpl+repo:${XMPL_REPO} --stderr - | jq '.items[] | {name, path, html_url}') #Get results from API
-			names+=($(echo "$out" | jq -r '.name' | sort | sed -E 's/.xmpl|.desc//')) #Parse names in array
-			paths+=($(echo "$out" | jq -r '.path' | sort | awk -F "/" '{print $2}')) #Parse paths in array
-			urls+=($(echo "$out" | jq -r '.html_url' | sort -t '/' -k 9,9 )) #Parse urls in array
+			out=$(curl --silent https://api.github.com/search/code?q=${query}+path:commands/${package}+extension:xmpl+repo:${XMPL_REPO} --stderr - | jq '[.items[] | {name, path, html_url} ]| sort_by(.path) | .[]') #Get results from API
+			names+=($(echo "$out" | jq -r '.name' | sed -E 's/.xmpl|.desc//')) #Parse names in array
+			paths+=($(echo "$out" | jq -r '.path' | awk -F "/" '{print $2}')) #Parse paths in array
+			urls+=($(echo "$out" | jq -r '.html_url')) #Parse urls in array
 		else
 			out=$(intersectionGrep "$package" "$query" "xmpl" "${XMPL_HOME}/.xmpl/repos/$XMPL_REPO" | sort) #get local results
 			names+=($(echo "$out" | sed -e 's/.*\///' -e 's/.xmpl//')) #Parse names in array
