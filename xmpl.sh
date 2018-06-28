@@ -1,9 +1,10 @@
 #!/bin/bash
 
-# xmpl-tool v1.0.8
+# xmpl-tool v1.0.9
 # Author: Ivan Krpan
-# Date: 27.04.2018
+# Date: 2018-06-22
 
+version='1.0.9'
 ##################################################################
 # EXIT FUNCTIONS
 function byebye {
@@ -477,23 +478,26 @@ function syncRepository {
 		response=${response,,} # tolower
 		if [[ $response =~ ^(yes|y| ) || -z $response ]]; then
 			git pull >&2
-			if [ $XMPL_USERNAME != 'xmpl-tool' ];then
-				if grep upstream <(git remote -v ) -q; then   
-					git fetch upstream >&2
-					git merge -m "Updates from upstream" upstream/master >&2
+			if ! git diff @{upstream} --quiet --;then
+				if [ $XMPL_USERNAME != 'xmpl-tool' ];then
+					if grep upstream <(git remote -v ) -q; then   
+						git fetch upstream >&2
+						git merge -m "Updates from upstream" upstream/master >&2
+					
+						cpackages=$(echo -e "$changes" | awk -F "/" '{print $2}' | uniq | tr "\n" " ")
+						commitMsg="$(echo -e "$fcnt file/s changed (${cpackages%% })\n$changes")"
+						git commit -m "${commitMsg}" >&2
+						while : ;do
+							git push origin master >&2 && break
+								echo -e "Try again? [Y/n]" >&2
+								read response
+								response=${response,,} # tolower
+								if [[ $response =~ ^(no|n) ]]; then
+									break
+								fi
+						done
+					fi
 				fi
-				cpackages=$(echo -e "$changes" | awk -F "/" '{print $2}' | uniq | tr "\n" " ")
-				commitMsg="$(echo -e "$fcnt file/s changed (${cpackages%% })\n$changes")"
-				git commit -m "${commitMsg}" >&2
-				while : ;do
-					git push origin master >&2 && break
-						echo -e "Try again? [Y/n]" >&2
-						read response
-						response=${response,,} # tolower
-						if [[ $response =~ ^(no|n) ]]; then
-							break
-						fi
-				done
 			fi
 		fi
 		if [ $XMPL_USERNAME == 'xmpl-tool' ];then
@@ -506,7 +510,6 @@ function syncRepository {
 	if git diff @{upstream} --quiet --;then
 		status=$(curl --silent https://api.github.com/repos/xmpl-tool/xmpl-repo/compare/xmpl-tool:master...$XMPL_USERNAME:master --stderr - | jq -r '.status')
 		#echo $status >&2
-				
 		if [ "$status" == "identical" -o "$status" == "ahead" ]; then
 			if [ $XMPL_USERNAME == 'xmpl-tool' ];then
 				editConfig 'XMPL_LAST_REPO_UPDATE' $(date +%F) ~/.xmpl/xmpl.conf
@@ -520,18 +523,43 @@ function syncRepository {
 			cd $tpwd
 			return
 		elif [ "$status" == "behind" ];then
-
-			if [ $XMPL_USERNAME == 'xmpl-tool' ];then
+#			if [ $XMPL_USERNAME != 'xmpl-tool' ];then
+				unset changes
+				changes+="$(git diff @{upstream} --name-only)"
+				fcnt=$(echo "$changes" | wc -l) 
+				echo "$fcnt file/s changed!" >&2
+				echo "$changes" >&2
 				echo -e "Do you want to synchronize '$XMPL_CURRENT_REPO' repository? [Y/n]" >&2
 				read response
-
+				
 				response=${response,,} # tolower
 				if [[ $response =~ ^(yes|y| ) || -z $response ]]; then
 					git pull >&2
+			
+						if [ $XMPL_USERNAME != 'xmpl-tool' ];then
+							if grep upstream <(git remote -v ) -q; then   
+								git fetch upstream >&2
+								git merge -m "Updates from upstream" upstream/master >&2
+							
+								cpackages=$(echo -e "$changes" | awk -F "/" '{print $2}' | uniq | tr "\n" " ")
+								commitMsg="$(echo -e "$fcnt file/s changed (${cpackages%% })\n$changes")"
+								git commit -m "${commitMsg}" >&2
+								while : ;do
+									git push origin master >&2 && break
+										echo -e "Try again? [Y/n]" >&2
+										read response
+										response=${response,,} # tolower
+										if [[ $response =~ ^(no|n) ]]; then
+											break
+										fi
+								done
+							fi
+						fi
+
 				fi
-			else
-				echo -e '\e[33mRepository up to date!\e[39m' >&2
-			fi
+#			else
+#				echo -e '\e[33mRepository up to date!\e[39m' >&2
+#			fi
 			if [ $XMPL_USERNAME == 'xmpl-tool' ];then
 				editConfig 'XMPL_LAST_REPO_UPDATE' $(date +%F) ~/.xmpl/xmpl.conf
 				XMPL_LAST_REPO_UPDATE=$(date +%F)
@@ -539,7 +567,6 @@ function syncRepository {
 			cd $tpwd
 			return
 		else
-
 			echo -e "Do you want to synchronize '$XMPL_CURRENT_REPO' repository? [Y/n]" >&2
 			read response
 
@@ -547,10 +574,8 @@ function syncRepository {
 			if [[ $response =~ ^(yes|y| ) || -z $response ]]; then
 				git pull >&2
 				if grep upstream <(git remote -v ) -q; then   
-					#if [ $XMPL_USERNAME != 'xmpl-tool' ];then
-						git fetch upstream >&2
-						git merge -m "Updates from upstream" upstream/master >&2
-					#fi
+					git fetch upstream >&2
+					git merge -m "Updates from upstream" upstream/master >&2
 				fi
 			fi
 			
@@ -701,10 +726,10 @@ function listAllPackages {
 		trap 'echo "" >&2;return 1;byebye;' SIGINT 
 		
 		if [ $XMPL_MODE_ONLINE -ge 1 ];then
-			out=$(curl --silent https://api.github.com/search/code?q=path:commands+extension:desc+repo:${XMPL_REPO} --stderr - | jq '.items[] | {name, path, html_url}') #Get results from API
-			names+=($(echo "$out" | jq -r '.name' | sort | sed -E 's/.xmpl|.desc//')) #Parse names in array
-			paths+=($(echo "$out" | jq -r '.path' | sort | awk -F "/" '{print $2}')) #Parse paths in array
-			urls+=($(echo "$out" | jq -r '.html_url' | sort -t '/' -k 9,9 )) #Parse urls in array
+			out=$(curl --silent https://api.github.com/search/code?q=path:commands+extension:desc+repo:${XMPL_REPO} --stderr - | jq '[.items[] | {name, path, html_url}] | sort_by(.path) | .[]') #Get results from API
+			names+=($(echo "$out" | jq -r '.name' | sed -E 's/.xmpl|.desc//')) #Parse names in array
+			paths+=($(echo "$out" | jq -r '.path' | awk -F "/" '{print $2}')) #Parse paths in array
+			urls+=($(echo "$out" | jq -r '.html_url' )) #Parse urls in array
 		else
 
 			#Auto sync..
@@ -783,10 +808,10 @@ function selectMode {
 		query=$2
 		
 		if [ $XMPL_MODE_ONLINE -ge 1 ];then
-			out=$(curl --silent https://api.github.com/search/code?q=${query}+path:commands/${package}+extension:xmpl+repo:${XMPL_REPO} --stderr - | jq '.items[] | {name, path, html_url}') #Get results from API
-			names+=($(echo "$out" | jq -r '.name' | sort | sed -E 's/.xmpl|.desc//')) #Parse names in array
-			paths+=($(echo "$out" | jq -r '.path' | sort | awk -F "/" '{print $2}')) #Parse paths in array
-			urls+=($(echo "$out" | jq -r '.html_url' | sort -t '/' -k 9,9 )) #Parse urls in array
+			out=$(curl --silent https://api.github.com/search/code?q=${query}+path:commands/${package}+extension:xmpl+repo:${XMPL_REPO} --stderr - | jq '[.items[] | {name, path, html_url} ]| sort_by(.path) | .[]') #Get results from API
+			names+=($(echo "$out" | jq -r '.name' | sed -E 's/.xmpl|.desc//')) #Parse names in array
+			paths+=($(echo "$out" | jq -r '.path' | awk -F "/" '{print $2}')) #Parse paths in array
+			urls+=($(echo "$out" | jq -r '.html_url')) #Parse urls in array
 		else
 			out=$(intersectionGrep "$package" "$query" "xmpl" "${XMPL_HOME}/.xmpl/repos/$XMPL_REPO" | sort) #get local results
 			names+=($(echo "$out" | sed -e 's/.*\///' -e 's/.xmpl//')) #Parse names in array
@@ -886,15 +911,32 @@ function executeMode {
 						echo -e "\e[39m\c" >&2 #Color default
 					fi
 					a=0
-				
 					for arg in $arguments #For each argument
 					do
 						if [[ ${arg} != '' ]]; then #If argument exists 
 								if [[ ! -z ${XMPL_INPUTS[$a]} ]] ;then
+									
 									#use existing user inputs
 									parm=${XMPL_INPUTS[$a]}
 									#Review the existing user input arguments
 									echo -e "\e[36m$arg:\e[39m" | sed -e 's/{:://' -e 's/::}//' -e 's/{://' -e 's/:}//' >&2 
+												
+									# if [[ -z ${parm} ]];then
+										# XMPL_INPUTS+=( "\"\"" )
+									# else
+										# XMPL_INPUTS+=( ${parm} )
+									# fi
+									
+									if [[ ${#parm} > 1 ]] && [[ ${parm:0:1} == "\"" ]] && [[ ${parm: -1} == "\"" ]];then #if value is commented with double quote
+										#remove double quote
+										parm=$(echo "${parm//\"/}")
+										parm=$(echo "${parm%%\"}")
+									elif [[ ${#parm} > 1 ]] && [[ ${parm:0:1} == "'" ]] && [[ ${parm: -1} == "'" ]];then #if value is commented with single quote
+										#remove single quote
+										parm=$(echo "${parm//\'/}")
+										parm=$(echo "${parm%%\'}")
+									fi
+									
 									
 									if [[ ! ${parm: -1} == " " ]]; then
 											echo -e $parm >&2
@@ -911,39 +953,63 @@ function executeMode {
 										fi		
 									
 								else
+									rm /tmp/xmplSuggestions 2>/dev/null
+									
 									trap 'return' SIGINT #return to ctrl+c for exiting read function
 									echo -e "\e[36m$arg:\e[39m" | sed -e 's/{:://' -e 's/::}//' -e 's/{://' -e 's/:}//'  >&2 #Asking user to input value
 																		
 									if [ "$XMPL_LAST_URL" == "$eurl" ];then
-										if [[ ! ${old_inputs[$a]: -1} == " " ]]; then
-											parm=$(read -e -i "${old_inputs[$a]}" parm && echo $parm) #read input with last input suggestion
+										if [[ ${old_inputs[$a]} == "\"\"" ]] || [[ ${old_inputs[$a]} == "''" ]]; then
+											echo "" > /tmp/xmplSuggestions
+											history -cr /tmp/xmplSuggestions
+											parm=$(read -e parm && echo $parm)
+										elif [[ ! ${old_inputs[$a]: -1} == " " ]]; then
+											echo "${old_inputs[$a]}" > /tmp/xmplSuggestions
+											history -cr /tmp/xmplSuggestions
+											parm=$(read -e  parm && echo $parm) #read input with last input suggestion
 										else
 											if [[ ! "$old_inputs[$a]" =~ "'" ]]; then
-												parm=$(read -e -i "'${old_inputs[$a]}'" parm && echo $parm) #read input with last input suggestion
+												echo "'${old_inputs[$a]}'" > /tmp/xmplSuggestions
+												history -cr /tmp/xmplSuggestions
+												parm=$(read -e parm && echo $parm) #read input with last input suggestion
 											else
-												if [[ ! "$old_inputs[$a]" =~ "\"" ]]; then
-													parm=$(read -e -i "\"${old_inputs[$a]}\"" parm && echo $parm) #read input with last input suggestion
+												if [[ ! "\"$old_inputs[$a]\"" =~ "\"" ]]; then
+													echo "${old_inputs[$a]}" > /tmp/xmplSuggestions
+													history -cr /tmp/xmplSuggestions
+													parm=$(read -e parm && echo $parm) #read input with last input suggestion
 												else
-													parm=$(read -e -i "${old_inputs[$a]}" parm && echo $parm) #read input with last input suggestion
+													echo "${old_inputs[$a]}" > /tmp/xmplSuggestions
+													history -cr /tmp/xmplSuggestions
+													parm=$(read -e parm && echo $parm) #read input with last input suggestion
 												fi
 											fi
 										fi
 									else
+										printf "%s\n" "${old_inputs[@]}" > /tmp/xmplSuggestions
+										history -cr /tmp/xmplSuggestions
 										parm=$(read -e parm && echo $parm) #read new input
 									fi
 
 									trap - SIGINT
 									parm=$(echo "${parm%% }") #remove last whitespace from user input (because autocomplete end with whitespace)
-									if [[ ${parm:0:1} == "\"" ]] && [[ ${parm: -1} == "\"" ]];then #if value is commented with double quote
+									
+									if [[ -z ${parm} ]];then
+										XMPL_INPUTS+=( "\"\"" )
+									else
+										XMPL_INPUTS+=( ${parm} )
+									fi
+									
+									if [[ ${parm} == "''" ]] || [[ ${parm} == "\"\"" ]];then #if value is commented with double quote
+										parm=""
+									elif [[ ${#parm} > 1 ]] && [[ ${parm:0:1} == "\"" ]] && [[ ${parm: -1} == "\"" ]];then #if value is commented with double quote
 										#remove double quote
 										parm=$(echo "${parm//\"/}")
 										parm=$(echo "${parm%%\"}")
-									elif [[ ${parm:0:1} == "'" ]] && [[ ${parm: -1} == "'" ]];then #if value is commented with single quote
+									elif [[ ${#parm} > 1 ]] && [[ ${parm:0:1} == "'" ]] && [[ ${parm: -1} == "'" ]];then #if value is commented with single quote
 										#remove single quote
 										parm=$(echo "${parm//\'/}")
 										parm=$(echo "${parm%%\'}")
 									fi
-									XMPL_INPUTS+=(${parm})
 								fi
 
 								#parms ecape chars 3x
@@ -1383,8 +1449,6 @@ function showHelp {
 ##################################################################
 # MAIN SCRIPT
 
-version='1.0.8'
-
 history -a #save current history
 set -f #disable shell wildcard character expansion
 
@@ -1536,9 +1600,13 @@ while getopts $flags flag; do
 		#Input mode
 		XMPL_MODE_INPUT=1
 		#getting inputs
-		until [[ $(eval "echo \${$OPTIND}") =~ ^-.* ]] || [[ -z $(eval "echo \${$OPTIND}") ]]; do
+		until [[ $(eval "echo \${$OPTIND}") =~ ^-.* ]] || [[ -z $(eval "echo \${${OPTIND}+x}") ]]; do
+			if [[ -z $(eval "echo \${$OPTIND}") ]];then
+				XMPL_INPUTS+=("''")
+			else
 				XMPL_INPUTS+=($(eval "echo \${$OPTIND}"))
-				shift
+			fi
+			shift
 		done
 	;;
 	x )
@@ -1546,9 +1614,13 @@ while getopts $flags flag; do
 		XMPL_MODE_INPUT=1
 		XMPL_MODE_EXECUTE=1
 		#getting inputs
-		until [[ $(eval "echo \${$OPTIND}") =~ ^-.* ]] || [[ -z $(eval "echo \${$OPTIND}") ]]; do
+		until [[ $(eval "echo \${$OPTIND}") =~ ^-.* ]] || [[ -z $(eval "echo \${${OPTIND}+x}") ]]; do
+			if [[ -z $(eval "echo \${$OPTIND}") ]];then
+				XMPL_INPUTS+=("''")
+			else
 				XMPL_INPUTS+=($(eval "echo \${$OPTIND}"))
-				shift
+			fi
+			shift
 		done
 		
 		
@@ -1559,6 +1631,7 @@ while getopts $flags flag; do
 			echo -e "\e[33mLast command not found for user `whoami`!\e[39m" >&2
 		else
 			XMPL_MODE_HISTORY=1
+
 		fi
 		XMPL_MODE_NULL=1
 	;;
@@ -1568,14 +1641,15 @@ while getopts $flags flag; do
 		XMPL_MODE_EXECUTE=1
 		XMPL_MODE_NULL=1
 		#get inputs
-		until [[ $(eval "echo \${$OPTIND}") =~ ^-.* ]] || [[ -z $(eval "echo \${$OPTIND}") ]]; do
+		until [[ $(eval "echo \${$OPTIND}") =~ ^-.* ]] || [[ -z $(eval "echo \${${OPTIND}+x}") ]]; do
+			if [[ -z $(eval "echo \${$OPTIND}") ]];then
+				XMPL_INPUTS+=("''")
+			else
 				XMPL_INPUTS+=($(eval "echo \${$OPTIND}"))
-				shift
+			fi
+			shift
 		done
-		#if no inputs, use last inputs
-		if [ -z $XMPL_INPUTS ];then
-			XMPL_INPUTS=(${old_inputs[@]})
-		fi
+
 		#check for last command
 		if [ -z $XMPL_LAST_PATH ];then
 			echo -e "\e[33mLast command not found for user `whoami`!\e[39m" >&2
